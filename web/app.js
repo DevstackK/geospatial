@@ -94,6 +94,12 @@ const els = {
   downloadDbTests: document.querySelector("#downloadDbTests"),
   copyDbTests: document.querySelector("#copyDbTests"),
   dbTestCards: document.querySelector("#dbTestCards"),
+  onboardingOverlay: document.querySelector("#onboardingOverlay"),
+  onboardingStep: document.querySelector("#onboardingStep"),
+  onboardingTitle: document.querySelector("#onboardingTitle"),
+  onboardingText: document.querySelector("#onboardingText"),
+  nextOnboarding: document.querySelector("#nextOnboarding"),
+  skipOnboarding: document.querySelector("#skipOnboarding"),
 };
 
 const exampleData = {
@@ -192,6 +198,8 @@ els.copyDbTests.addEventListener("click", async () => {
   await copyText(els.dbTestsOutput.value);
   flashButton(els.copyDbTests, "Copied");
 });
+els.nextOnboarding.addEventListener("click", nextOnboardingStep);
+els.skipOnboarding.addEventListener("click", finishOnboarding);
 
 els.fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
@@ -247,6 +255,83 @@ function setView(view) {
   els.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
+}
+
+const onboardingSteps = [
+  {
+    view: "howto",
+    selector: '[data-view="howto"]',
+    title: "Start with How to",
+    text: "This tab explains the Gcomm Oracle to IQGEO Oracle flow, the prerequisites, and the business value before you run anything.",
+  },
+  {
+    view: "dbtests",
+    selector: '[data-view="dbtests"]',
+    title: "Test the databases first",
+    text: "Generate read-only Oracle checks for Gcomm and IQGEO so you can confirm access, row counts, IDs, status values, SRIDs, and geometry quality.",
+  },
+  {
+    view: "iqgeo",
+    selector: '[data-view="iqgeo"]',
+    title: "Define strict IQGEO rules",
+    text: "Set required fields, allowed asset types, statuses, geometry rules, redundant statuses, and parent-reference checks before import.",
+  },
+  {
+    view: "pipeline",
+    selector: '[data-view="pipeline"]',
+    title: "Generate execution config",
+    text: "Pipeline mode creates the YAML used by the backend runner for dry-run and execute workflows.",
+  },
+  {
+    view: "pipeline",
+    selector: "#copyCommands",
+    title: "Run from the backend",
+    text: "Copy the commands and run dry-run first. The browser does not connect to databases or store credentials.",
+  },
+];
+
+let onboardingIndex = 0;
+
+startOnboarding();
+
+function startOnboarding() {
+  if (window.localStorage.getItem("a2aGeoOnboardingComplete") === "true") return;
+  showOnboardingStep(0);
+}
+
+function showOnboardingStep(index) {
+  onboardingIndex = index;
+  const step = onboardingSteps[index];
+  setView(step.view);
+  document.querySelectorAll(".spotlight-target").forEach((node) => {
+    node.classList.remove("spotlight-target");
+  });
+  const target = document.querySelector(step.selector);
+  target?.classList.add("spotlight-target");
+  target?.scrollIntoView({ block: "center", behavior: "smooth" });
+
+  els.onboardingStep.textContent = `Step ${index + 1} of ${onboardingSteps.length}`;
+  els.onboardingTitle.textContent = step.title;
+  els.onboardingText.textContent = step.text;
+  els.nextOnboarding.textContent =
+    index === onboardingSteps.length - 1 ? "Finish" : "Next";
+  els.onboardingOverlay.classList.remove("hidden");
+}
+
+function nextOnboardingStep() {
+  if (onboardingIndex >= onboardingSteps.length - 1) {
+    finishOnboarding();
+    return;
+  }
+  showOnboardingStep(onboardingIndex + 1);
+}
+
+function finishOnboarding() {
+  window.localStorage.setItem("a2aGeoOnboardingComplete", "true");
+  document.querySelectorAll(".spotlight-target").forEach((node) => {
+    node.classList.remove("spotlight-target");
+  });
+  els.onboardingOverlay.classList.add("hidden");
 }
 
 function renderPipeline() {

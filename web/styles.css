@@ -61,6 +61,74 @@ button:disabled {
   color: #fff;
 }
 
+.info-button {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border-color: #9fb0a5;
+  color: #204f41;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+}
+
+.spotlight-target {
+  position: relative;
+  z-index: 60;
+  box-shadow:
+    0 0 0 4px #ffffff,
+    0 0 0 9px rgba(38, 115, 91, 0.72),
+    0 18px 42px rgba(0, 0, 0, 0.25);
+}
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(20, 28, 23, 0.58);
+}
+
+.onboarding-card {
+  position: relative;
+  z-index: 70;
+  width: min(560px, 100%);
+  border: 1px solid #cad5c6;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.28);
+  padding: 20px;
+}
+
+.onboarding-card h2 {
+  margin-bottom: 8px;
+}
+
+.onboarding-card p:not(.eyebrow) {
+  margin-bottom: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#nextOnboarding {
+  background: #204f41;
+  border-color: #204f41;
+  color: #fff;
+}
+
 .file-button input {
   display: none;
 }
@@ -562,5 +630,14 @@ textarea {
 
   .check-grid {
     grid-template-columns: 1fr;
+  }
+
+  .onboarding-overlay {
+    align-items: flex-end;
+    padding: 14px;
+  }
+
+  .onboarding-card {
+    padding: 16px;
   }
 }

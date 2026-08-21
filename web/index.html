@@ -75,7 +75,10 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Pipeline config</h3>
+            <h3>
+              Pipeline config
+              <button class="info-button" type="button" title="Set where the backend reads from, which fields it validates, and where clean rows are staged for Oracle.">i</button>
+            </h3>
             <span id="configStatus">Ready</span>
           </div>
           <div class="form-grid">
@@ -147,7 +150,10 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Generated YAML</h3>
+            <h3>
+              Generated YAML
+              <button class="info-button" type="button" title="Download this config and run it from the Python backend runner. The browser does not execute database jobs.">i</button>
+            </h3>
             <span>Save as config/oracle-output.yaml</span>
           </div>
           <textarea id="yamlOutput" spellcheck="false"></textarea>
@@ -156,7 +162,10 @@
 
       <aside class="side">
         <section class="panel">
-          <h3>Run commands</h3>
+          <h3>
+            Run commands
+            <button class="info-button" type="button" title="Run dry-run first. Execute mode should only run after the audit and SQL plan are reviewed.">i</button>
+          </h3>
           <div class="command-list">
             <code id="installCommand">pip install -e ".[postgis,oracle]"</code>
             <code id="dryRunCommand">a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
@@ -226,7 +235,10 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Oracle tables</h3>
+            <h3>
+              Oracle tables
+              <button class="info-button" type="button" title="Define the Gcomm source, IQGEO target, and holding tables for clean, rejected, and redundant records.">i</button>
+            </h3>
             <span>Source, stage, clean, reject</span>
           </div>
           <div class="form-grid">
@@ -259,7 +271,10 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Strict validation rules</h3>
+            <h3>
+              Strict validation rules
+              <button class="info-button" type="button" title="These rules decide whether each Gcomm row is approved, fixed, rejected, quarantined, redundant, or needs review before IQGEO import.">i</button>
+            </h3>
             <span>IQGEO import gate</span>
           </div>
           <div class="form-grid">
@@ -385,7 +400,10 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Connection and table settings</h3>
+            <h3>
+              Connection and table settings
+              <button class="info-button" type="button" title="Use environment variable names only. Keep passwords on the backend runner, not in the browser.">i</button>
+            </h3>
             <span>Environment names only</span>
           </div>
           <div class="form-grid">
@@ -517,22 +535,44 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Use the app</h3>
+            <h3>
+              Use the app
+              <button class="info-button" type="button" title="Follow this sequence: test database access, define IQGEO rules, generate configs, dry-run, review, then execute approved imports.">i</button>
+            </h3>
             <span>Pipeline and IQGEO rules</span>
           </div>
           <ol class="step-list">
             <li>
-              <strong>Run DB tests first.</strong>
+              <strong>Confirm the source and target tables.</strong>
+              Identify the Gcomm Oracle source tables, IQGEO Oracle target
+              tables, primary IDs, geometry columns, status fields, and
+              parent-reference fields. Put those names into <code>DB tests</code>
+              and <code>IQGEO rules</code>.
+            </li>
+            <li>
+              <strong>Run read-only DB tests.</strong>
               Open <code>DB tests</code>, confirm the Gcomm and IQGEO table
               names, copy the read-only test pack, and run it from the backend
               runner to verify connectivity, table access, IDs, status values,
               and geometry quality.
             </li>
             <li>
+              <strong>Review the DB test results.</strong>
+              Check row counts, null IDs, null geometries, duplicate IDs,
+              invalid Oracle Spatial geometries, SRID distribution, existing
+              IQGEO IDs, and status values that may indicate redundant data.
+            </li>
+            <li>
               <strong>Open IQGEO rules.</strong>
               Define Gcomm source tables, IQGEO target tables, staging tables,
               clean/reject/redundant tables, required fields, asset types,
               statuses, geometry rules, and parent reference rules.
+            </li>
+            <li>
+              <strong>Decide how each failure is classified.</strong>
+              Keep valid rows as approved, send safe automatic fixes to fixed,
+              block hard failures as rejected, hold uncertain records as
+              quarantined, and move retired or duplicate records to redundant.
             </li>
             <li>
               <strong>Download the rules YAML.</strong>
@@ -552,14 +592,66 @@
             </li>
             <li>
               <strong>Run dry-run first.</strong>
-              Review the generated SQL plan and audit before allowing execution.
+              Review the generated validation report, reject/redundant counts,
+              SQL plan, and audit before allowing execution.
             </li>
             <li>
               <strong>Execute only after review.</strong>
-              Run execute mode after validating row counts, changed fields, and
-              staging-table behavior.
+              Run execute mode only after sign-off on row counts, changed fields,
+              reject reasons, redundant classifications, and staging-table
+              behavior.
+            </li>
+            <li>
+              <strong>Import only approved records into IQGEO.</strong>
+              The IQGEO target should receive clean and approved rows only.
+              Rejected, quarantined, redundant, and review rows stay outside the
+              target import path with audit reasons.
             </li>
           </ol>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              Value this gives you
+              <button class="info-button" type="button" title="The value is controlled migration: fewer failed imports, cleaner IQGEO data, and audit evidence for every blocked or changed row.">i</button>
+            </h3>
+            <span>Why use it</span>
+          </div>
+          <div class="check-grid">
+            <article>
+              <strong>Fewer failed IQGEO imports</strong>
+              <p>
+                Bad geometry, missing IDs, invalid statuses, and relationship
+                breaks are found before they reach the strict IQGEO schema.
+              </p>
+              <code>validate before merge</code>
+            </article>
+            <article>
+              <strong>Controlled redundant data</strong>
+              <p>
+                Retired, abandoned, duplicate, and decommissioned assets can be
+                separated into redundant tables instead of polluting IQGEO.
+              </p>
+              <code>archive/report only</code>
+            </article>
+            <article>
+              <strong>Clear audit trail</strong>
+              <p>
+                Every rejected, quarantined, fixed, or approved row gets a rule
+                reason, so teams can explain exactly why data moved or stopped.
+              </p>
+              <code>rule_code · source_id · reason</code>
+            </article>
+            <article>
+              <strong>Safer migration decisions</strong>
+              <p>
+                You can measure the quality of Gcomm data before import, review
+                exceptions with the business, and avoid blind bulk loading.
+              </p>
+              <code>dry-run first</code>
+            </article>
+          </div>
         </section>
 
         <section class="panel">
@@ -742,6 +834,21 @@
         </section>
       </aside>
     </main>
+
+    <div id="onboardingOverlay" class="onboarding-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+      <div class="onboarding-card">
+        <p class="eyebrow" id="onboardingStep">Step 1 of 5</p>
+        <h2 id="onboardingTitle">Start with How to</h2>
+        <p id="onboardingText">
+          The How to tab explains the Gcomm Oracle to IQGEO Oracle workflow,
+          prerequisites, and value before you generate configs.
+        </p>
+        <div class="onboarding-actions">
+          <button id="skipOnboarding" type="button">Skip</button>
+          <button id="nextOnboarding" type="button">Next</button>
+        </div>
+      </div>
+    </div>
 
     <template id="issueTemplate">
       <article class="issue">
