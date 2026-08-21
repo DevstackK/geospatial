@@ -78,9 +78,13 @@ const els = {
   iqgeoFailureAction: document.querySelector("#iqgeoFailureAction"),
   iqgeoParentRules: document.querySelector("#iqgeoParentRules"),
   iqgeoRulesOutput: document.querySelector("#iqgeoRulesOutput"),
+  iqgeoRuleTestsOutput: document.querySelector("#iqgeoRuleTestsOutput"),
   downloadIqgeoRules: document.querySelector("#downloadIqgeoRules"),
   copyIqgeoRules: document.querySelector("#copyIqgeoRules"),
+  downloadIqgeoRuleTests: document.querySelector("#downloadIqgeoRuleTests"),
+  copyIqgeoRuleTests: document.querySelector("#copyIqgeoRuleTests"),
   iqgeoRuleCards: document.querySelector("#iqgeoRuleCards"),
+  iqgeoAutomationCards: document.querySelector("#iqgeoAutomationCards"),
   gcommDsnEnv: document.querySelector("#gcommDsnEnv"),
   iqgeoDsnEnv: document.querySelector("#iqgeoDsnEnv"),
   gcommUserEnv: document.querySelector("#gcommUserEnv"),
@@ -191,6 +195,13 @@ els.copyIqgeoRules.addEventListener("click", async () => {
   await copyText(els.iqgeoRulesOutput.value);
   flashButton(els.copyIqgeoRules, "Copied");
 });
+els.downloadIqgeoRuleTests.addEventListener("click", () =>
+  downloadText("iqgeo-rule-tests.sql", els.iqgeoRuleTestsOutput.value, "text/plain"),
+);
+els.copyIqgeoRuleTests.addEventListener("click", async () => {
+  await copyText(els.iqgeoRuleTestsOutput.value);
+  flashButton(els.copyIqgeoRuleTests, "Copied");
+});
 els.downloadDbTests.addEventListener("click", () =>
   downloadText("oracle-db-tests.sql", els.dbTestsOutput.value, "text/plain"),
 );
@@ -295,7 +306,6 @@ let onboardingIndex = 0;
 startOnboarding();
 
 function startOnboarding() {
-  if (window.localStorage.getItem("a2aGeoOnboardingComplete") === "true") return;
   showOnboardingStep(0);
 }
 
@@ -327,7 +337,6 @@ function nextOnboardingStep() {
 }
 
 function finishOnboarding() {
-  window.localStorage.setItem("a2aGeoOnboardingComplete", "true");
   document.querySelectorAll(".spotlight-target").forEach((node) => {
     node.classList.remove("spotlight-target");
   });
@@ -442,7 +451,9 @@ function renderGates(config) {
 function renderIqgeoRules() {
   const config = readIqgeoConfig();
   els.iqgeoRulesOutput.value = buildIqgeoRulesYaml(config);
+  els.iqgeoRuleTestsOutput.value = buildIqgeoRuleTestsSql(config);
   renderIqgeoRuleCards(config);
+  renderIqgeoAutomationCards(config);
 }
 
 function readIqgeoConfig() {
@@ -533,6 +544,108 @@ function renderIqgeoRuleCards(config) {
     item.querySelector("span").textContent = text;
     els.iqgeoRuleCards.append(item);
   }
+}
+
+function renderIqgeoAutomationCards(config) {
+  const cards = [
+    ["Schema checks", `${config.requiredFields.length} required-field tests generated.`],
+    ["Domain checks", "Allowed asset type, status, and redundant-status tests generated."],
+    ["Geometry checks", `SRID ${config.srid}, null geometry, and Oracle Spatial validity tests generated.`],
+    ["Relationship checks", `${config.parentRules.length} parent-reference tests generated.`],
+    ["Import collision checks", `Existing ${config.keyFields.join(", ") || "key"} values in IQGEO are counted.`],
+  ];
+  els.iqgeoAutomationCards.textContent = "";
+  for (const [title, text] of cards) {
+    const item = document.createElement("div");
+    item.className = "rule";
+    item.innerHTML = "<strong></strong><span></span>";
+    item.querySelector("strong").textContent = title;
+    item.querySelector("span").textContent = text;
+    els.iqgeoAutomationCards.append(item);
+  }
+}
+
+function buildIqgeoRuleTestsSql(config) {
+  const source = sqlQualifiedName(config.gcommSourceTable);
+  const target = sqlQualifiedName(config.iqgeoTargetTable);
+  const geom = sqlIdentifier("GEOM");
+  const key = sqlIdentifier(config.keyFields[0] || "ASSET_ID");
+  const status = sqlIdentifier("STATUS");
+  const assetType = sqlIdentifier("ASSET_TYPE");
+  const allowedAssetTypes = sqlStringList(config.assetTypes);
+  const allowedStatuses = sqlStringList(config.statuses);
+  const redundantStatuses = sqlStringList(config.redundantStatuses);
+
+  return [
+    "-- IQGEO rule automation test pack",
+    "-- Run against Gcomm source or staging data before IQGEO import.",
+    "-- Read-only checks: each query returns records/counts that break configured rules.",
+    "",
+    "-- 1. Required field null counts",
+    ...config.requiredFields.flatMap((field) => [
+      `SELECT '${field}' AS rule_field, COUNT(*) AS failing_rows`,
+      `FROM ${source}`,
+      `WHERE ${sqlIdentifier(field)} IS NULL;`,
+      "",
+    ]),
+    "-- 2. Duplicate key values",
+    `SELECT ${key}, COUNT(*) AS duplicate_count`,
+    `FROM ${source}`,
+    `WHERE ${key} IS NOT NULL`,
+    `GROUP BY ${key}`,
+    "HAVING COUNT(*) > 1",
+    "FETCH FIRST 100 ROWS ONLY;",
+    "",
+    "-- 3. Asset types outside IQGEO allowed list",
+    `SELECT ${assetType}, COUNT(*) AS row_count`,
+    `FROM ${source}`,
+    `WHERE ${assetType} IS NOT NULL AND UPPER(${assetType}) NOT IN (${allowedAssetTypes})`,
+    `GROUP BY ${assetType}`,
+    "ORDER BY row_count DESC;",
+    "",
+    "-- 4. Status values outside IQGEO allowed list",
+    `SELECT ${status}, COUNT(*) AS row_count`,
+    `FROM ${source}`,
+    `WHERE ${status} IS NOT NULL AND UPPER(${status}) NOT IN (${allowedStatuses}, ${redundantStatuses})`,
+    `GROUP BY ${status}`,
+    "ORDER BY row_count DESC;",
+    "",
+    "-- 5. Redundant records that should not import into IQGEO",
+    `SELECT ${status}, COUNT(*) AS redundant_rows`,
+    `FROM ${source}`,
+    `WHERE UPPER(${status}) IN (${redundantStatuses})`,
+    `GROUP BY ${status}`,
+    "ORDER BY redundant_rows DESC;",
+    "",
+    "-- 6. Null geometry",
+    `SELECT COUNT(*) AS null_geometry_rows FROM ${source} WHERE ${geom} IS NULL;`,
+    "",
+    "-- 7. Invalid Oracle Spatial geometry",
+    "SELECT validation_result, COUNT(*) AS row_count",
+    "FROM (",
+    `  SELECT SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT(${geom}, 0.005) AS validation_result`,
+    `  FROM ${source}`,
+    `  WHERE ${geom} IS NOT NULL`,
+    ")",
+    "WHERE validation_result <> 'TRUE'",
+    "GROUP BY validation_result",
+    "ORDER BY row_count DESC;",
+    "",
+    "-- 8. SRID mismatch",
+    `SELECT ${geom}.SDO_SRID AS srid, COUNT(*) AS row_count`,
+    `FROM ${source}`,
+    `WHERE ${geom} IS NOT NULL AND NVL(${geom}.SDO_SRID, -1) <> ${config.srid}`,
+    `GROUP BY ${geom}.SDO_SRID`,
+    "ORDER BY row_count DESC;",
+    "",
+    "-- 9. Source keys already present in IQGEO target",
+    `SELECT COUNT(*) AS existing_target_key_rows`,
+    `FROM ${source} s`,
+    `JOIN ${target} t ON t.${key} = s.${key};`,
+    "",
+    "-- 10. Parent/reference rule checks",
+    ...relationshipTestSql(config.parentRules, source),
+  ].join("\n");
 }
 
 function renderDbTests() {
@@ -1288,6 +1401,42 @@ function sqlIdentifier(value) {
   const cleaned = value.trim().replace(/^"|"$/g, "");
   if (!cleaned) return '""';
   return `"${cleaned.replaceAll('"', '""').toUpperCase()}"`;
+}
+
+function sqlStringList(values) {
+  if (!values.length) return "''";
+  return values.map((value) => `'${value.replaceAll("'", "''").toUpperCase()}'`).join(", ");
+}
+
+function relationshipTestSql(rules, source) {
+  if (!rules.length) return ["-- No parent/reference rules configured.", ""];
+  return rules.flatMap((rule, index) => {
+    const child = relationshipColumn(rule.child);
+    const parent = relationshipColumn(rule.parent);
+    const parentTable = relationshipTable(rule.parent);
+    const parentSource = parentTable ? sqlQualifiedName(parentTable) : source;
+    return [
+      `-- 10.${index + 1}. Missing parent reference: ${rule.child} -> ${rule.parent}`,
+      "SELECT COUNT(*) AS missing_parent_rows",
+      `FROM ${source} child_rows`,
+      `LEFT JOIN ${parentSource} parent_rows`,
+      `  ON parent_rows.${parent} = child_rows.${child}`,
+      `WHERE child_rows.${child} IS NOT NULL`,
+      `  AND parent_rows.${parent} IS NULL;`,
+      "",
+    ];
+  });
+}
+
+function relationshipColumn(value) {
+  const last = value.split(".").at(-1) || value;
+  return sqlIdentifier(last);
+}
+
+function relationshipTable(value) {
+  const parts = value.split(".").map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) return "";
+  return parts.slice(0, -1).join(".");
 }
 
 function flashButton(button, text) {

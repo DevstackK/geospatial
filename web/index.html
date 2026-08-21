@@ -211,6 +211,7 @@
           <div class="toolbar-actions">
             <button id="downloadIqgeoRules" type="button">Rules YAML</button>
             <button id="copyIqgeoRules" type="button">Copy rules</button>
+            <button id="downloadIqgeoRuleTests" type="button">Test SQL</button>
           </div>
         </div>
 
@@ -328,6 +329,17 @@
           </div>
           <textarea id="iqgeoRulesOutput" spellcheck="false"></textarea>
         </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              Automated rule tests
+              <button class="info-button" type="button" title="These read-only SQL checks test the IQGEO rules against Gcomm or staging data before any import into IQGEO.">i</button>
+            </h3>
+            <span>Save as iqgeo-rule-tests.sql</span>
+          </div>
+          <textarea id="iqgeoRuleTestsOutput" spellcheck="false"></textarea>
+        </section>
       </section>
 
       <aside class="side">
@@ -346,6 +358,12 @@
         <section class="panel">
           <h3>Rule categories</h3>
           <div id="iqgeoRuleCards" class="rule-list"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Automation checks</h3>
+          <div id="iqgeoAutomationCards" class="rule-list"></div>
+          <button id="copyIqgeoRuleTests" type="button">Copy test SQL</button>
         </section>
 
         <section class="panel">
