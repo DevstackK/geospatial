@@ -27,6 +27,7 @@ class RuleType(str, Enum):
     NORMALIZE_CATEGORY = "normalize_category"
     REQUIRE_COLUMN = "require_column"
     CHECK_BOUNDS = "check_bounds"
+    VALIDATE_PARALLEL_ASSOCIATION = "validate_parallel_association"
 
 
 @dataclass(frozen=True)

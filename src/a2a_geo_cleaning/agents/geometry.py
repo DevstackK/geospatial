@@ -41,9 +41,26 @@ class GeometryAgent(Agent):
                 )
             )
 
+        association = state.config.get("rules", {}).get("parallel_association") or state.config.get(
+            "validation", {}
+        ).get("parallel_association")
+        if association:
+            rules.append(
+                CleaningRule(
+                    rule_type=RuleType.VALIDATE_PARALLEL_ASSOCIATION,
+                    target=association.get("span_table", "spans"),
+                    parameters=association,
+                    confidence=0.92,
+                    review_required=True,
+                    reason=(
+                        "Duct-span matching must consider parallel alignment, "
+                        "not only nearest distance."
+                    ),
+                )
+            )
+
         return AgentResult(
             agent=AgentRole.GEOMETRY,
             summary=f"Prepared {len(rules)} geometry cleaning and validation rules.",
             proposed_rules=rules,
         )
-

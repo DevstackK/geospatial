@@ -278,7 +278,86 @@ class OracleSpatialExecutor:
                 )
             ]
 
+        if rule.rule_type == RuleType.VALIDATE_PARALLEL_ASSOCIATION:
+            return self._parallel_association_steps(rule)
+
         return []
+
+    def _parallel_association_steps(
+        self, rule: CleaningRule
+    ) -> list[OracleSpatialSQLStep]:
+        params = rule.parameters
+        span_table = self._quote_qualified(params["span_table"])
+        duct_table = self._quote_qualified(params["duct_table"])
+        result_table = self._quote_qualified(params.get("result_table", "IQGEO_STAGE.SPAN_DUCT_MATCH_AUDIT"))
+        span_id = self._quote_identifier(params.get("span_id_column", "SPAN_ID"))
+        span_geom = self._quote_identifier(params.get("span_geometry_column", "GEOM"))
+        duct_id = self._quote_identifier(params.get("duct_id_column", "DUCT_ID"))
+        duct_geom = self._quote_identifier(params.get("duct_geometry_column", "GEOM"))
+        current_match = self._quote_identifier(params.get("current_match_column", "MATCHED_DUCT_ID"))
+        max_distance = float(params.get("max_distance", 25))
+        angle_tolerance = float(params.get("angle_tolerance_degrees", 25))
+        perpendicular_penalty = float(params.get("perpendicular_penalty", 1000))
+        candidate_count = int(params.get("candidate_count", 8))
+        bearing_function = self._quote_function_name(
+            params.get("bearing_function", "GEOM_BEARING_DEGREES")
+        )
+        bearing_delta = (
+            "LEAST("
+            f"ABS({bearing_function}(s.{span_geom}) - {bearing_function}(d.{duct_geom})), "
+            f"180 - ABS({bearing_function}(s.{span_geom}) - {bearing_function}(d.{duct_geom}))"
+            ")"
+        )
+
+        scoring_sql = (
+            f"CREATE TABLE {result_table} AS "
+            "WITH candidates AS ("
+            f"SELECT s.{span_id} AS SPAN_ID, s.{current_match} AS CURRENT_DUCT_ID, "
+            f"d.{duct_id} AS CANDIDATE_DUCT_ID, "
+            f"SDO_GEOM.SDO_DISTANCE(s.{span_geom}, d.{duct_geom}, 0.005) AS DISTANCE_M, "
+            f"{bearing_delta} AS ALIGNMENT_DELTA "
+            f"FROM {span_table} s JOIN {duct_table} d "
+            f"ON SDO_NN(d.{duct_geom}, s.{span_geom}, "
+            f"'sdo_num_res={candidate_count} distance={max_distance}', 1) = 'TRUE'"
+            "), scored AS ("
+            "SELECT candidates.*, "
+            "DISTANCE_M + CASE "
+            f"WHEN ALIGNMENT_DELTA > {angle_tolerance} THEN {perpendicular_penalty} "
+            "ELSE ALIGNMENT_DELTA END AS MATCH_SCORE "
+            "FROM candidates"
+            "), ranked AS ("
+            "SELECT scored.*, ROW_NUMBER() OVER (PARTITION BY SPAN_ID ORDER BY MATCH_SCORE) AS RN "
+            "FROM scored"
+            ") "
+            "SELECT SPAN_ID, CURRENT_DUCT_ID, CANDIDATE_DUCT_ID AS RECOMMENDED_DUCT_ID, "
+            "DISTANCE_M, ALIGNMENT_DELTA, MATCH_SCORE, "
+            "CASE WHEN CURRENT_DUCT_ID = CANDIDATE_DUCT_ID THEN 'MATCHED' "
+            "ELSE 'INCORRECT_ASSOCIATION' END AS ASSOCIATION_STATUS "
+            "FROM ranked WHERE RN = 1"
+        )
+
+        return [
+            OracleSpatialSQLStep(
+                "drop_parallel_association_audit",
+                (
+                    "BEGIN EXECUTE IMMEDIATE "
+                    f"{self._literal(f'DROP TABLE {result_table} PURGE')}; "
+                    "EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;"
+                ),
+            ),
+            OracleSpatialSQLStep("score_parallel_duct_associations", scoring_sql),
+            OracleSpatialSQLStep(
+                "audit_parallel_association_mismatches",
+                (
+                    f"INSERT INTO {self.audit_table} "
+                    "(RUN_NAME, RULE_TYPE, TARGET, AFFECTED_COUNT, DETAILS) "
+                    f"SELECT {self.run_name}, 'validate_parallel_association', "
+                    f"{self._literal(params.get('span_table', 'spans'))}, COUNT(*), "
+                    f"{self._literal('nearest match replaced by parallel-alignment scoring')} "
+                    f"FROM {result_table} WHERE ASSOCIATION_STATUS = 'INCORRECT_ASSOCIATION'"
+                ),
+            ),
+        ]
 
     def _classification_steps(self) -> list[OracleSpatialSQLStep]:
         if not any(
@@ -428,6 +507,12 @@ class OracleSpatialExecutor:
         if not IDENTIFIER_RE.match(value):
             raise OracleSpatialConfigurationError(f"Unsafe Oracle identifier: {value!r}")
         return f'"{value.upper()}"'
+
+    def _quote_function_name(self, value: str) -> str:
+        parts = value.split(".")
+        if len(parts) not in {1, 2}:
+            raise OracleSpatialConfigurationError("Function names must be `name` or `schema.name`.")
+        return ".".join(self._quote_identifier(part) for part in parts)
 
     def _literal(self, value: str) -> str:
         return "'" + value.replace("'", "''") + "'"

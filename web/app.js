@@ -96,6 +96,11 @@ const els = {
   iqgeoSrid: document.querySelector("#iqgeoSrid"),
   iqgeoFailureAction: document.querySelector("#iqgeoFailureAction"),
   iqgeoParentRules: document.querySelector("#iqgeoParentRules"),
+  spanTable: document.querySelector("#spanTable"),
+  ductTable: document.querySelector("#ductTable"),
+  parallelMaxDistance: document.querySelector("#parallelMaxDistance"),
+  parallelAngleTolerance: document.querySelector("#parallelAngleTolerance"),
+  associationCorrections: document.querySelector("#associationCorrections"),
   iqgeoRulesOutput: document.querySelector("#iqgeoRulesOutput"),
   iqgeoRuleTestsOutput: document.querySelector("#iqgeoRuleTestsOutput"),
   downloadIqgeoRules: document.querySelector("#downloadIqgeoRules"),
@@ -761,6 +766,11 @@ function readIqgeoConfig() {
     srid: Number(valueOf(els.iqgeoSrid) || 4326),
     failureAction: valueOf(els.iqgeoFailureAction),
     parentRules: relationshipValues(els.iqgeoParentRules),
+    spanTable: valueOf(els.spanTable),
+    ductTable: valueOf(els.ductTable),
+    parallelMaxDistance: Number(valueOf(els.parallelMaxDistance) || 25),
+    parallelAngleTolerance: Number(valueOf(els.parallelAngleTolerance) || 25),
+    associationCorrections: mappingValues(els.associationCorrections),
   };
 }
 
@@ -798,6 +808,22 @@ function buildIqgeoRulesYaml(config) {
     "    reject_zero_length_lines: true",
     "  relationships:",
     ...relationshipYaml(config.parentRules),
+    "  parallel_association:",
+    `    span_table: ${yamlScalar(config.spanTable)}`,
+    `    duct_table: ${yamlScalar(config.ductTable)}`,
+    "    span_id_column: SPAN_ID",
+    "    span_geometry_column: GEOM",
+    "    duct_id_column: DUCT_ID",
+    "    duct_geometry_column: GEOM",
+    "    current_match_column: MATCHED_DUCT_ID",
+    "    result_table: IQGEO_STAGE.SPAN_DUCT_MATCH_AUDIT",
+    "    bearing_function: GEOM_BEARING_DEGREES",
+    `    max_distance: ${config.parallelMaxDistance}`,
+    `    angle_tolerance_degrees: ${config.parallelAngleTolerance}`,
+    "    perpendicular_penalty: 1000",
+    "    candidate_count: 8",
+    "    known_corrections:",
+    ...yamlMapBlock(config.associationCorrections, "      "),
     "",
     "classification:",
     "  approved: import_to_iqgeo",
@@ -822,6 +848,7 @@ function renderIqgeoRuleCards(config) {
     ["Domain values", `${config.assetTypes.length} asset types and ${config.statuses.length} statuses allowed.`],
     ["Redundant data", `${config.redundantStatuses.join(", ") || "No"} statuses are separated from import.`],
     ["Relationships", `${config.parentRules.length} parent/reference checks configured.`],
+    ["Span to duct matching", `${config.spanTable} candidates are scored against ${config.ductTable} by distance and parallel alignment.`],
   ];
   els.iqgeoRuleCards.textContent = "";
   for (const [title, text] of cards) {
@@ -840,6 +867,7 @@ function renderIqgeoAutomationCards(config) {
     ["Domain checks", "Allowed asset type, status, and redundant-status tests generated."],
     ["Geometry checks", `SRID ${config.srid}, null geometry, and Oracle Spatial validity tests generated.`],
     ["Relationship checks", `${config.parentRules.length} parent-reference tests generated.`],
+    ["Parallel association", "Nearest perpendicular duct matches are penalized; parallel candidates are preferred."],
     ["Import collision checks", `Existing ${config.keyFields.join(", ") || "key"} values in IQGEO are counted.`],
   ];
   els.iqgeoAutomationCards.textContent = "";
@@ -933,6 +961,9 @@ function buildIqgeoRuleTestsSql(config) {
     "",
     "-- 10. Parent/reference rule checks",
     ...relationshipTestSql(config.parentRules, source),
+    "",
+    "-- 11. Span-to-duct parallel association scoring",
+    ...parallelAssociationTestSql(config),
   ].join("\n");
 }
 
@@ -1733,6 +1764,34 @@ function relationshipTestSql(rules, source) {
       "",
     ];
   });
+}
+
+function parallelAssociationTestSql(config) {
+  const spanTable = sqlQualifiedName(config.spanTable);
+  const ductTable = sqlQualifiedName(config.ductTable);
+  const corrections = Object.entries(config.associationCorrections);
+  return [
+    "-- Requires an Oracle function such as GEOM_BEARING_DEGREES(geom) that returns line bearing in degrees.",
+    "WITH candidates AS (",
+    "  SELECT s.SPAN_ID, s.MATCHED_DUCT_ID AS current_duct_id, d.DUCT_ID AS candidate_duct_id,",
+    "         SDO_GEOM.SDO_DISTANCE(s.GEOM, d.GEOM, 0.005) AS distance_m,",
+    "         LEAST(ABS(GEOM_BEARING_DEGREES(s.GEOM) - GEOM_BEARING_DEGREES(d.GEOM)),",
+    "               180 - ABS(GEOM_BEARING_DEGREES(s.GEOM) - GEOM_BEARING_DEGREES(d.GEOM))) AS bearing_delta",
+    `  FROM ${spanTable} s JOIN ${ductTable} d`,
+    `    ON SDO_NN(d.GEOM, s.GEOM, 'sdo_num_res=8 distance=${config.parallelMaxDistance}', 1) = 'TRUE'`,
+    "), ranked AS (",
+    "  SELECT candidates.*,",
+    `         ROW_NUMBER() OVER (PARTITION BY SPAN_ID ORDER BY distance_m + CASE WHEN bearing_delta > ${config.parallelAngleTolerance} THEN 1000 ELSE bearing_delta END) AS rn`,
+    "  FROM candidates",
+    ")",
+    "SELECT * FROM ranked WHERE rn = 1 AND current_duct_id <> candidate_duct_id;",
+    "",
+    "-- Known corrections from verified anomaly screenshots",
+    ...corrections.map(
+      ([span, duct]) =>
+        `SELECT ${yamlScalar(span)} AS span_id, ${yamlScalar(duct)} AS expected_parallel_duct_id FROM DUAL;`,
+    ),
+  ];
 }
 
 function relationshipColumn(value) {

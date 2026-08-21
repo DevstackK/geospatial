@@ -481,6 +481,39 @@ The Oracle dry-run plan now includes set-based SQL to build clean, reject,
 quarantine, and redundant tables. Execute mode should only run after the
 operator reviews the dry-run audit and approves the job.
 
+## Span-To-Duct Association Rule
+
+Nearest duct is not enough for telecom network matching. GeoFlow IQ can generate
+an Oracle Spatial plan that scores candidate ducts by distance and parallel
+alignment, then flags cases where the current matched duct is likely a
+perpendicular false positive.
+
+Example from the verified anomaly:
+
+```yaml
+rules:
+  parallel_association:
+    span_table: GCOMM.SPANS
+    duct_table: GCOMM.DUCTS
+    current_match_column: MATCHED_DUCT_ID
+    result_table: IQGEO_STAGE.SPAN_DUCT_MATCH_AUDIT
+    bearing_function: GEOM_BEARING_DEGREES
+    max_distance: 25
+    angle_tolerance_degrees: 25
+    perpendicular_penalty: 1000
+    candidate_count: 8
+    known_corrections:
+      101: 32540397
+      102: 32540397
+      103: 36311192
+```
+
+The generated SQL uses `SDO_NN` for nearby duct candidates, calls
+`GEOM_BEARING_DEGREES(geom)` to compare span and duct alignment, penalizes
+perpendicular candidates, and writes `INCORRECT_ASSOCIATION` rows to the match
+audit table. If the Oracle estate already has a bearing/azimuth function, set
+`bearing_function` to that name.
+
 ## End-To-End Video Guide
 
 Use this as the operator training video script:

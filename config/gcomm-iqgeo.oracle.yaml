@@ -29,6 +29,24 @@ rules:
     miny: -90
     maxx: 180
     maxy: 90
+  parallel_association:
+    span_table: GCOMM.SPANS
+    duct_table: GCOMM.DUCTS
+    span_id_column: SPAN_ID
+    span_geometry_column: GEOM
+    duct_id_column: DUCT_ID
+    duct_geometry_column: GEOM
+    current_match_column: MATCHED_DUCT_ID
+    result_table: IQGEO_STAGE.SPAN_DUCT_MATCH_AUDIT
+    bearing_function: GEOM_BEARING_DEGREES
+    max_distance: 25
+    angle_tolerance_degrees: 25
+    perpendicular_penalty: 1000
+    candidate_count: 8
+    known_corrections:
+      101: 32540397
+      102: 32540397
+      103: 36311192
 
 execution:
   engine: oracle_spatial

@@ -526,6 +526,26 @@
               Parent reference rules
               <input id="iqgeoParentRules" type="text" value="CABLE.PARENT_STRUCTURE_ID -> STRUCTURE.STRUCTURE_ID, SPLICE.CABLE_ID -> CABLE.CABLE_ID" />
             </label>
+            <label>
+              Span table
+              <input id="spanTable" type="text" value="GCOMM.SPANS" />
+            </label>
+            <label>
+              Duct table
+              <input id="ductTable" type="text" value="GCOMM.DUCTS" />
+            </label>
+            <label>
+              Max match distance
+              <input id="parallelMaxDistance" type="number" value="25" />
+            </label>
+            <label>
+              Parallel angle tolerance
+              <input id="parallelAngleTolerance" type="number" value="25" />
+            </label>
+            <label class="wide">
+              Known association corrections
+              <input id="associationCorrections" type="text" value="101=32540397, 102=32540397, 103=36311192" />
+            </label>
           </div>
         </section>
 

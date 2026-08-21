@@ -170,6 +170,21 @@ def test_oracle_spatial_dry_run_generates_validation_plan(tmp_path: Path) -> Non
             "string_trim_columns": ["STATUS"],
             "category_maps": {"STATUS": {"active ": "ACTIVE", "retired": "RETIRED"}},
             "bounds": {"minx": -180, "miny": -90, "maxx": 180, "maxy": 90},
+            "parallel_association": {
+                "span_table": "GCOMM.SPANS",
+                "duct_table": "GCOMM.DUCTS",
+                "span_id_column": "SPAN_ID",
+                "span_geometry_column": "GEOM",
+                "duct_id_column": "DUCT_ID",
+                "duct_geometry_column": "GEOM",
+                "current_match_column": "MATCHED_DUCT_ID",
+                "result_table": "IQGEO_STAGE.SPAN_DUCT_MATCH_AUDIT",
+                "bearing_function": "GEOM_BEARING_DEGREES",
+                "max_distance": 25,
+                "angle_tolerance_degrees": 25,
+                "perpendicular_penalty": 1000,
+                "candidate_count": 8,
+            },
         },
         "execution": {
             "engine": "oracle_spatial",
@@ -203,6 +218,10 @@ def test_oracle_spatial_dry_run_generates_validation_plan(tmp_path: Path) -> Non
     assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_REJECT" AS SELECT *' in sql
     assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_QUARANTINE" AS SELECT *' in sql
     assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_REDUNDANT" AS SELECT *' in sql
+    assert 'CREATE TABLE "IQGEO_STAGE"."SPAN_DUCT_MATCH_AUDIT" AS' in sql
+    assert "SDO_NN" in sql
+    assert '"GEOM_BEARING_DEGREES"' in sql
+    assert "INCORRECT_ASSOCIATION" in sql
     assert "DBMS_STATS.GATHER_TABLE_STATS" in sql
     assert (tmp_path / "audit.json").exists()
 
