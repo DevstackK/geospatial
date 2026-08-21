@@ -34,6 +34,9 @@ const els = {
   copyClaudePrompt: document.querySelector("#copyClaudePrompt"),
   mapCanvas: document.querySelector("#mapCanvas"),
   boundsLabel: document.querySelector("#boundsLabel"),
+  pipelineSourceEngine: document.querySelector("#pipelineSourceEngine"),
+  pipelineValidationEngine: document.querySelector("#pipelineValidationEngine"),
+  pipelineTargetEngine: document.querySelector("#pipelineTargetEngine"),
   pipelineName: document.querySelector("#pipelineName"),
   pipelineMode: document.querySelector("#pipelineMode"),
   postgisTable: document.querySelector("#postgisTable"),
@@ -50,6 +53,7 @@ const els = {
   oracleKeyColumns: document.querySelector("#oracleKeyColumns"),
   oracleColumns: document.querySelector("#oracleColumns"),
   sourceEngine: document.querySelector("#sourceEngine"),
+  validationEngineLabel: document.querySelector("#validationEngineLabel"),
   outputSink: document.querySelector("#outputSink"),
   pipelineRunMode: document.querySelector("#pipelineRunMode"),
   validationGate: document.querySelector("#validationGate"),
@@ -349,6 +353,9 @@ function renderPipeline() {
   const config = readPipelineConfig();
   state.pipelineYaml = buildPipelineYaml(config);
   els.yamlOutput.value = state.pipelineYaml;
+  els.sourceEngine.textContent = engineLabel(config.sourceEngine);
+  els.validationEngineLabel.textContent = engineLabel(config.validationEngine);
+  els.outputSink.textContent = engineLabel(config.targetEngine);
   els.pipelineRunMode.textContent = config.runMode;
   els.validationGate.textContent = String(config.reviewThreshold);
   els.configStatus.textContent = config.requiredColumns.length
@@ -359,6 +366,9 @@ function renderPipeline() {
 
 function readPipelineConfig() {
   return {
+    sourceEngine: valueOf(els.pipelineSourceEngine),
+    validationEngine: valueOf(els.pipelineValidationEngine),
+    targetEngine: valueOf(els.pipelineTargetEngine),
     projectName: valueOf(els.pipelineName),
     runMode: valueOf(els.pipelineMode),
     postgisTable: valueOf(els.postgisTable),
@@ -378,19 +388,16 @@ function readPipelineConfig() {
 }
 
 function buildPipelineYaml(config) {
+  const executionEngine =
+    config.validationEngine === "oracle_spatial" ? "oracle_spatial" : config.validationEngine;
   return [
     "project:",
     `  name: ${yamlScalar(config.projectName)}`,
     `  run_mode: ${yamlScalar(config.runMode)}`,
-    "  output_dir: ./runs/postgis-oracle-cleaning",
+    "  output_dir: ./runs/gcomm-iqgeo-cleansing",
     "",
     "dataset:",
-    "  source: postgis",
-    `  table: ${yamlScalar(config.postgisTable)}`,
-    `  geometry_column: ${yamlScalar(config.geometryColumn)}`,
-    `  id_column: ${yamlScalar(config.idColumn)}`,
-    `  target_crs: ${yamlScalar(config.targetCrs)}`,
-    ...yamlListBlock("  required_columns:", config.requiredColumns),
+    ...buildDatasetYaml(config),
     "",
     "rules:",
     ...yamlListBlock("  string_trim_columns:", config.trimColumns),
@@ -406,14 +413,56 @@ function buildPipelineYaml(config) {
     "    maxx: 180",
     "    maxy: 90",
     "",
+    "validation:",
+    `  engine: ${yamlScalar(config.validationEngine)}`,
+    "  reject_null_geometry: true",
+    "  reject_invalid_geometry: true",
+    "  classify_redundant_records: true",
+    "",
     "execution:",
-    "  engine: postgis",
+    `  engine: ${yamlScalar(executionEngine)}`,
     `  audit_table: ${yamlScalar(config.auditTable)}`,
     `  review_confidence_threshold: ${config.reviewThreshold}`,
-    "  write_cleaned_dataset: false",
+    `  write_cleaned_dataset: ${config.targetEngine === "file" ? "true" : "false"}`,
     "",
     "output:",
+    ...buildOutputYaml(config),
+    "",
+  ].join("\n");
+}
+
+function buildDatasetYaml(config) {
+  const common = [
+    `  geometry_column: ${yamlScalar(config.geometryColumn)}`,
+    `  id_column: ${yamlScalar(config.idColumn)}`,
+    `  target_crs: ${yamlScalar(config.targetCrs)}`,
+    ...yamlListBlock("  required_columns:", config.requiredColumns),
+  ];
+  if (config.sourceEngine === "file") {
+    return [
+      "  source: file",
+      `  path: ${yamlScalar(config.postgisTable)}`,
+      ...common,
+    ];
+  }
+  return [
+    `  source: ${yamlScalar(config.sourceEngine)}`,
+    `  table: ${yamlScalar(config.postgisTable)}`,
+    ...common,
+  ];
+}
+
+function buildOutputYaml(config) {
+  if (config.targetEngine === "file") {
+    return [
+      "  sink: file",
+      "  format: geojson",
+      "  path: ./runs/gcomm-iqgeo-cleansing/cleaned-output.geojson",
+    ];
+  }
+  return [
     "  sink: oracle",
+    `  target_system: ${config.targetEngine === "oracle_iqgeo" ? "iqgeo" : "oracle"}`,
     "  mode: merge",
     `  stage_table: ${yamlScalar(config.oracleStageTable)}`,
     `  target_table: ${yamlScalar(config.oracleTargetTable)}`,
@@ -422,18 +471,17 @@ function buildPipelineYaml(config) {
     ...yamlListBlock("  columns:", config.oracleColumns),
     "  geometry:",
     `    column: ${yamlScalar(oracleGeometryColumn(config))}`,
-    "    source_format: wkt",
+    "    source_format: sdo_geometry",
     "    srid: 4326",
-    "",
-  ].join("\n");
+  ];
 }
 
 function renderGates(config) {
   const gates = [
-    ["Dry-run first", "Generates PostGIS and Oracle SQL plans before execution."],
+    ["Dry-run first", `Generates a ${engineLabel(config.validationEngine)} validation plan before execution.`],
     ["Audit table", `Writes rule counts and validation checks to ${config.auditTable}.`],
     ["Review threshold", `Rules below ${config.reviewThreshold} confidence remain visible for review.`],
-    ["Oracle merge", `Stages rows in ${config.oracleStageTable} before merging into ${config.oracleTargetTable}.`],
+    ["Target handling", targetGateText(config)],
   ];
   els.gateList.textContent = "";
   for (const [title, text] of gates) {
@@ -444,6 +492,24 @@ function renderGates(config) {
     item.querySelector("span").textContent = text;
     els.gateList.append(item);
   }
+}
+
+function targetGateText(config) {
+  if (config.targetEngine === "file") {
+    return "Writes cleaned output to a file for review or external import.";
+  }
+  return `Stages rows in ${config.oracleStageTable} before merging into ${config.oracleTargetTable}.`;
+}
+
+function engineLabel(value) {
+  return {
+    oracle: "Oracle",
+    postgis: "PostGIS",
+    file: "File",
+    oracle_spatial: "Oracle Spatial",
+    python: "Python/Shapely",
+    oracle_iqgeo: "IQGEO Oracle",
+  }[value] || value;
 }
 
 function renderIqgeoRules() {

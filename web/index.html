@@ -10,7 +10,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">A2A Geo Cleaning</p>
-        <h1>PostGIS to Oracle cleansing app</h1>
+        <h1>Gcomm to IQGEO cleansing app</h1>
       </div>
       <div class="actions">
         <button class="mode-button" data-view="howto" type="button">
@@ -44,8 +44,8 @@
           <div>
             <h2>Production write-back pipeline</h2>
             <p>
-              Build the config for cleansing data in PostGIS, auditing the run,
-              and publishing clean rows back to Oracle.
+              Build the config for the selected source, validation, and target
+              engines. Oracle Spatial is the default for Gcomm to IQGEO.
             </p>
           </div>
           <div class="toolbar-actions">
@@ -57,11 +57,15 @@
         <div class="summary-grid" aria-label="Pipeline summary">
           <div class="metric">
             <span>Source engine</span>
-            <strong id="sourceEngine">PostGIS</strong>
+            <strong id="sourceEngine">Oracle</strong>
           </div>
           <div class="metric">
-            <span>Output sink</span>
-            <strong id="outputSink">Oracle</strong>
+            <span>Validation</span>
+            <strong id="validationEngineLabel">Oracle Spatial</strong>
+          </div>
+          <div class="metric">
+            <span>Target</span>
+            <strong id="outputSink">IQGEO Oracle</strong>
           </div>
           <div class="metric">
             <span>Run mode</span>
@@ -83,8 +87,32 @@
           </div>
           <div class="form-grid">
             <label>
+              Source engine
+              <select id="pipelineSourceEngine">
+                <option value="oracle">Oracle / Gcomm</option>
+                <option value="postgis">PostGIS</option>
+                <option value="file">File / GeoJSON</option>
+              </select>
+            </label>
+            <label>
+              Validation engine
+              <select id="pipelineValidationEngine">
+                <option value="oracle_spatial">Oracle Spatial</option>
+                <option value="postgis">PostGIS</option>
+                <option value="python">Python / Shapely</option>
+              </select>
+            </label>
+            <label>
+              Target engine
+              <select id="pipelineTargetEngine">
+                <option value="oracle_iqgeo">Oracle / IQGEO</option>
+                <option value="oracle">Oracle staging</option>
+                <option value="file">File export</option>
+              </select>
+            </label>
+            <label>
               Project name
-              <input id="pipelineName" type="text" value="parcels-postgis-to-oracle" />
+              <input id="pipelineName" type="text" value="gcomm-to-iqgeo-cleansing" />
             </label>
             <label>
               Run mode
@@ -94,16 +122,16 @@
               </select>
             </label>
             <label>
-              PostGIS table
-              <input id="postgisTable" type="text" value="public.parcels" />
+              Source table or file
+              <input id="postgisTable" type="text" value="GCOMM.ASSETS" />
             </label>
             <label>
               Geometry column
-              <input id="postgisGeometry" type="text" value="geom" />
+              <input id="postgisGeometry" type="text" value="GEOM" />
             </label>
             <label>
               ID column
-              <input id="pipelineIdColumn" type="text" value="parcel_id" />
+              <input id="pipelineIdColumn" type="text" value="ASSET_ID" />
             </label>
             <label>
               Target CRS
@@ -111,15 +139,15 @@
             </label>
             <label>
               Required columns
-              <input id="pipelineRequiredColumns" type="text" value="parcel_id, owner_name, land_use" />
+              <input id="pipelineRequiredColumns" type="text" value="ASSET_ID, ASSET_TYPE, STATUS, GEOM" />
             </label>
             <label>
               Trim columns
-              <input id="pipelineTrimColumns" type="text" value="owner_name, land_use" />
+              <input id="pipelineTrimColumns" type="text" value="ASSET_TYPE, STATUS" />
             </label>
             <label>
               Audit table
-              <input id="auditTable" type="text" value="public.cleaning_audit" />
+              <input id="auditTable" type="text" value="IQGEO_STAGE.CLEANSING_AUDIT" />
             </label>
             <label>
               Review threshold
@@ -127,23 +155,23 @@
             </label>
             <label>
               Oracle stage table
-              <input id="oracleStageTable" type="text" value="GIS.PARCELS_CLEANED_STAGE" />
+              <input id="oracleStageTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_STAGE" />
             </label>
             <label>
               Oracle target table
-              <input id="oracleTargetTable" type="text" value="GIS.PARCELS" />
+              <input id="oracleTargetTable" type="text" value="IQGEO.ASSETS" />
             </label>
             <label>
               Export/source table
-              <input id="oracleSourceTable" type="text" value="PUBLIC.PARCELS_CLEANED_EXPORT" />
+              <input id="oracleSourceTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_CLEAN" />
             </label>
             <label>
               Oracle key columns
-              <input id="oracleKeyColumns" type="text" value="PARCEL_ID" />
+              <input id="oracleKeyColumns" type="text" value="ASSET_ID" />
             </label>
             <label class="wide">
               Oracle columns
-              <input id="oracleColumns" type="text" value="PARCEL_ID, OWNER_NAME, LAND_USE, GEOM" />
+              <input id="oracleColumns" type="text" value="ASSET_ID, ASSET_TYPE, STATUS, GEOM" />
             </label>
           </div>
         </section>
@@ -722,6 +750,47 @@
                 rules are proven.
               </p>
               <code>good for pilot testing</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Dynamic engine support</h3>
+            <span>PostGIS optional</span>
+          </div>
+          <div class="check-grid">
+            <article>
+              <strong>Oracle to Oracle</strong>
+              <p>
+                Best fit for Gcomm to IQGEO. Use Oracle as the source, Oracle
+                Spatial as the validation engine, and IQGEO Oracle as the target.
+              </p>
+              <code>source: oracle · validation: oracle_spatial</code>
+            </article>
+            <article>
+              <strong>PostGIS path</strong>
+              <p>
+                Use this only when data is already in PostGIS or when you want a
+                separate spatial workbench before writing back to Oracle.
+              </p>
+              <code>source: postgis · validation: postgis</code>
+            </article>
+            <article>
+              <strong>File path</strong>
+              <p>
+                Use file mode for sample datasets, GeoJSON review, or exporting a
+                cleaned dataset without touching a database target.
+              </p>
+              <code>source: file · target: file</code>
+            </article>
+            <article>
+              <strong>Python validation</strong>
+              <p>
+                Use Python/Shapely for smaller files or offline checks. For large
+                Oracle datasets, keep validation close to Oracle.
+              </p>
+              <code>validation: python</code>
             </article>
           </div>
         </section>
