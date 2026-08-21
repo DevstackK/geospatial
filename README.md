@@ -9,9 +9,10 @@ The core idea is simple: specialized agents analyze different parts of the data,
 propose cleaning rules, deterministic GIS code applies the safe operations, and
 the system writes an audit trail explaining what happened.
 
-It can run in three ways:
+It can run in four ways:
 
 - a Python CLI for local cleaning jobs
+- a browser app for PostGIS to Oracle pipeline configuration
 - a browser dashboard for quick GeoJSON inspection
 - an official A2A JSON-RPC server so other agents or apps can call the cleaner
 
@@ -179,8 +180,64 @@ a2a-geo-clean config/oracle-output.example.yaml --run-mode dry_run
 
 ## Frontend
 
-Open `web/index.html` in a browser to inspect sample GeoJSON files without a
-server. The dashboard shows:
+Open `web/index.html` in a browser, or serve the `web/` folder locally. The
+frontend is a static app, so it does not need Node, a database connection, or a
+backend server just to run in the browser.
+
+The app has two modes.
+
+### Pipeline Mode
+
+Pipeline mode is the production setup screen for a PostGIS to Oracle cleansing
+job. It helps you build the YAML config that the Python backend will run.
+
+Use it to enter:
+
+- PostGIS source table, geometry column, ID column, and target CRS
+- required columns and string-trim columns
+- audit table and review confidence threshold
+- Oracle staging table, target table, source/export table, key columns, and
+  output columns
+
+The app generates a YAML config. Download it as `oracle-output.yaml` and place
+it under `config/`, then run a dry-run first:
+
+```bash
+a2a-geo-clean config/oracle-output.yaml --run-mode dry_run
+```
+
+Dry-run mode does not change PostGIS or Oracle. It writes an audit report and
+SQL plan showing what would happen.
+
+After reviewing the SQL plan and audit, run execute mode:
+
+```bash
+a2a-geo-clean config/oracle-output.yaml --run-mode execute
+```
+
+Execute mode needs database credentials in the environment:
+
+```bash
+export DATABASE_URL="postgresql://user:password@host:5432/geodata"
+export ORACLE_DSN="host:1521/service"
+export ORACLE_USER="gis_user"
+export ORACLE_PASSWORD="your_password"
+```
+
+The intended production pattern is:
+
+```text
+PostGIS table
+  -> generate cleansing SQL
+  -> audit changed/flagged records
+  -> stage clean rows for Oracle
+  -> MERGE reviewed rows into Oracle target table
+```
+
+### GeoJSON Inspect Mode
+
+GeoJSON inspect mode is for small samples and local review. It supports GeoJSON
+FeatureCollections in the browser and shows:
 
 - detected data issues
 - affected feature/value counts
@@ -190,10 +247,10 @@ server. The dashboard shows:
 - downloadable `audit.json`
 - downloadable cleaned GeoJSON
 
-The browser dashboard currently supports GeoJSON FeatureCollections. Use the
-Python CLI for GeoPackage, Shapefile, and FlatGeoBuf execution.
+Use the Python CLI for GeoPackage, Shapefile, FlatGeoBuf, large files, PostGIS,
+and Oracle execution.
 
-During local development you can serve the dashboard with:
+During local development you can serve the app with:
 
 ```bash
 cd web
@@ -206,11 +263,42 @@ Then open:
 http://localhost:8765/
 ```
 
-Deploy the frontend to Vercel from the project root with:
+## Deploy The Frontend
+
+The browser app is static. Deploying it does not deploy the Python CLI, A2A
+server, PostGIS executor, or Oracle connector. It deploys the UI that generates
+the config and lets users inspect small GeoJSON files.
+
+This repo includes `web/vercel.json`, so the simplest deployment is Vercel.
+From the project root:
 
 ```bash
 vercel --prod web
 ```
+
+If the Vercel CLI asks to link the project, choose the existing project if one
+already exists, or create a new one. The deployment output will include the
+public URL.
+
+You can also deploy `web/` to any static host, including Netlify, Cloudflare
+Pages, GitHub Pages, or an internal web server. The required files are:
+
+```text
+web/index.html
+web/styles.css
+web/app.js
+web/vercel.json
+```
+
+For the backend execution path, deploy or run the Python service separately:
+
+```bash
+pip install -e ".[a2a,postgis,oracle]"
+a2a-geo-agent --host 0.0.0.0 --port 8787
+```
+
+The frontend currently generates configs and local downloads. It does not send
+credentials or run database jobs from the browser.
 
 ## Optional Claude Planner
 

@@ -51,6 +51,16 @@ button:disabled {
   opacity: 0.5;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.mode-button.active {
+  background: #204f41;
+  border-color: #204f41;
+  color: #fff;
+}
+
 .file-button input {
   display: none;
 }
@@ -112,6 +122,19 @@ h3 {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 18px;
   padding: 18px clamp(16px, 3vw, 34px) 34px;
+}
+
+.pipeline-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+  padding: 18px clamp(16px, 3vw, 34px) 34px;
+}
+
+.pipeline-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .workspace,
@@ -339,7 +362,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 38px;
   margin-top: 6px;
@@ -348,6 +372,48 @@ select {
   background: #fff;
   color: var(--ink);
   padding: 8px 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+textarea {
+  min-height: 430px;
+  resize: vertical;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.command-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.command-list code {
+  display: block;
+  overflow-x: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f6faf4;
+  color: #1f3f35;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#copyCommands {
+  width: 100%;
+  margin-top: 14px;
 }
 
 #reanalyze {
@@ -359,7 +425,8 @@ select {
 }
 
 @media (max-width: 920px) {
-  .layout {
+  .layout,
+  .pipeline-layout {
     grid-template-columns: 1fr;
   }
 
@@ -388,6 +455,10 @@ select {
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
     grid-template-columns: 1fr;
   }
 }

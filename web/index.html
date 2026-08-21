@@ -3,16 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A2A Geo Cleaning Dashboard</title>
+    <title>A2A Geo Cleaning App</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <p class="eyebrow">A2A Geo Cleaning</p>
-        <h1>Data issues and fixes</h1>
+        <h1>PostGIS to Oracle cleansing app</h1>
       </div>
       <div class="actions">
+        <button class="mode-button active" data-view="pipeline" type="button">
+          Pipeline
+        </button>
+        <button class="mode-button" data-view="inspect" type="button">
+          GeoJSON inspect
+        </button>
         <button id="loadExample" type="button" title="Load bundled example data">
           Example
         </button>
@@ -23,7 +29,157 @@
       </div>
     </header>
 
-    <main class="layout">
+    <main id="pipelineView" class="pipeline-layout">
+      <section class="pipeline-main">
+        <div class="toolbar">
+          <div>
+            <h2>Production write-back pipeline</h2>
+            <p>
+              Build the config for cleansing data in PostGIS, auditing the run,
+              and publishing clean rows back to Oracle.
+            </p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="downloadYaml" type="button">Config YAML</button>
+            <button id="copyYaml" type="button">Copy YAML</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="Pipeline summary">
+          <div class="metric">
+            <span>Source engine</span>
+            <strong id="sourceEngine">PostGIS</strong>
+          </div>
+          <div class="metric">
+            <span>Output sink</span>
+            <strong id="outputSink">Oracle</strong>
+          </div>
+          <div class="metric">
+            <span>Run mode</span>
+            <strong id="pipelineRunMode">dry_run</strong>
+          </div>
+          <div class="metric">
+            <span>Validation gate</span>
+            <strong id="validationGate">0.85</strong>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Pipeline config</h3>
+            <span id="configStatus">Ready</span>
+          </div>
+          <div class="form-grid">
+            <label>
+              Project name
+              <input id="pipelineName" type="text" value="parcels-postgis-to-oracle" />
+            </label>
+            <label>
+              Run mode
+              <select id="pipelineMode">
+                <option value="dry_run">dry_run</option>
+                <option value="execute">execute</option>
+              </select>
+            </label>
+            <label>
+              PostGIS table
+              <input id="postgisTable" type="text" value="public.parcels" />
+            </label>
+            <label>
+              Geometry column
+              <input id="postgisGeometry" type="text" value="geom" />
+            </label>
+            <label>
+              ID column
+              <input id="pipelineIdColumn" type="text" value="parcel_id" />
+            </label>
+            <label>
+              Target CRS
+              <input id="pipelineTargetCrs" type="text" value="EPSG:4326" />
+            </label>
+            <label>
+              Required columns
+              <input id="pipelineRequiredColumns" type="text" value="parcel_id, owner_name, land_use" />
+            </label>
+            <label>
+              Trim columns
+              <input id="pipelineTrimColumns" type="text" value="owner_name, land_use" />
+            </label>
+            <label>
+              Audit table
+              <input id="auditTable" type="text" value="public.cleaning_audit" />
+            </label>
+            <label>
+              Review threshold
+              <input id="reviewThreshold" type="number" min="0" max="1" step="0.01" value="0.85" />
+            </label>
+            <label>
+              Oracle stage table
+              <input id="oracleStageTable" type="text" value="GIS.PARCELS_CLEANED_STAGE" />
+            </label>
+            <label>
+              Oracle target table
+              <input id="oracleTargetTable" type="text" value="GIS.PARCELS" />
+            </label>
+            <label>
+              Export/source table
+              <input id="oracleSourceTable" type="text" value="PUBLIC.PARCELS_CLEANED_EXPORT" />
+            </label>
+            <label>
+              Oracle key columns
+              <input id="oracleKeyColumns" type="text" value="PARCEL_ID" />
+            </label>
+            <label class="wide">
+              Oracle columns
+              <input id="oracleColumns" type="text" value="PARCEL_ID, OWNER_NAME, LAND_USE, GEOM" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Generated YAML</h3>
+            <span>Save as config/oracle-output.yaml</span>
+          </div>
+          <textarea id="yamlOutput" spellcheck="false"></textarea>
+        </section>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>Run commands</h3>
+          <div class="command-list">
+            <code id="installCommand">pip install -e ".[postgis,oracle]"</code>
+            <code id="dryRunCommand">a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
+            <code id="executeCommand">a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
+          </div>
+          <button id="copyCommands" type="button">Copy commands</button>
+        </section>
+
+        <section class="panel">
+          <h3>Safety gates</h3>
+          <div id="gateList" class="rule-list"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Environment</h3>
+          <div class="llm-config">
+            <span>PostGIS</span>
+            <strong>DATABASE_URL</strong>
+          </div>
+          <div class="llm-config">
+            <span>Oracle</span>
+            <strong>ORACLE_DSN, ORACLE_USER, ORACLE_PASSWORD</strong>
+          </div>
+          <div class="llm-config">
+            <span>Optional planner</span>
+            <strong>ANTHROPIC_API_KEY</strong>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <main id="inspectView" class="layout hidden">
       <section class="workspace">
         <div class="toolbar">
           <div>

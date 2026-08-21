@@ -3,9 +3,13 @@ const state = {
   data: null,
   audit: null,
   cleaned: null,
+  pipelineYaml: "",
 };
 
 const els = {
+  modeButtons: document.querySelectorAll(".mode-button"),
+  pipelineView: document.querySelector("#pipelineView"),
+  inspectView: document.querySelector("#inspectView"),
   fileInput: document.querySelector("#fileInput"),
   loadExample: document.querySelector("#loadExample"),
   datasetName: document.querySelector("#datasetName"),
@@ -27,6 +31,34 @@ const els = {
   copyClaudePrompt: document.querySelector("#copyClaudePrompt"),
   mapCanvas: document.querySelector("#mapCanvas"),
   boundsLabel: document.querySelector("#boundsLabel"),
+  pipelineName: document.querySelector("#pipelineName"),
+  pipelineMode: document.querySelector("#pipelineMode"),
+  postgisTable: document.querySelector("#postgisTable"),
+  postgisGeometry: document.querySelector("#postgisGeometry"),
+  pipelineIdColumn: document.querySelector("#pipelineIdColumn"),
+  pipelineTargetCrs: document.querySelector("#pipelineTargetCrs"),
+  pipelineRequiredColumns: document.querySelector("#pipelineRequiredColumns"),
+  pipelineTrimColumns: document.querySelector("#pipelineTrimColumns"),
+  auditTable: document.querySelector("#auditTable"),
+  reviewThreshold: document.querySelector("#reviewThreshold"),
+  oracleStageTable: document.querySelector("#oracleStageTable"),
+  oracleTargetTable: document.querySelector("#oracleTargetTable"),
+  oracleSourceTable: document.querySelector("#oracleSourceTable"),
+  oracleKeyColumns: document.querySelector("#oracleKeyColumns"),
+  oracleColumns: document.querySelector("#oracleColumns"),
+  sourceEngine: document.querySelector("#sourceEngine"),
+  outputSink: document.querySelector("#outputSink"),
+  pipelineRunMode: document.querySelector("#pipelineRunMode"),
+  validationGate: document.querySelector("#validationGate"),
+  configStatus: document.querySelector("#configStatus"),
+  yamlOutput: document.querySelector("#yamlOutput"),
+  downloadYaml: document.querySelector("#downloadYaml"),
+  copyYaml: document.querySelector("#copyYaml"),
+  copyCommands: document.querySelector("#copyCommands"),
+  installCommand: document.querySelector("#installCommand"),
+  dryRunCommand: document.querySelector("#dryRunCommand"),
+  executeCommand: document.querySelector("#executeCommand"),
+  gateList: document.querySelector("#gateList"),
 };
 
 const exampleData = {
@@ -75,6 +107,33 @@ const categoryMaps = {
   },
 };
 
+els.modeButtons.forEach((button) => {
+  button.addEventListener("click", () => setView(button.dataset.view));
+});
+
+document.querySelectorAll("#pipelineView input, #pipelineView select").forEach((input) => {
+  input.addEventListener("input", renderPipeline);
+  input.addEventListener("change", renderPipeline);
+});
+
+els.downloadYaml.addEventListener("click", () =>
+  downloadText("oracle-output.yaml", state.pipelineYaml, "application/x-yaml"),
+);
+els.copyYaml.addEventListener("click", async () => {
+  await copyText(state.pipelineYaml);
+  flashButton(els.copyYaml, "Copied");
+});
+els.copyCommands.addEventListener("click", async () => {
+  await copyText(
+    [
+      els.installCommand.textContent,
+      els.dryRunCommand.textContent,
+      els.executeCommand.textContent,
+    ].join("\n"),
+  );
+  flashButton(els.copyCommands, "Copied");
+});
+
 els.fileInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -108,7 +167,122 @@ els.copyClaudePrompt.addEventListener("click", async () => {
   }, 1200);
 });
 
+renderPipeline();
 drawEmptyMap();
+
+function setView(view) {
+  const showPipeline = view === "pipeline";
+  els.pipelineView.classList.toggle("hidden", !showPipeline);
+  els.inspectView.classList.toggle("hidden", showPipeline);
+  els.modeButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === view);
+  });
+}
+
+function renderPipeline() {
+  const config = readPipelineConfig();
+  state.pipelineYaml = buildPipelineYaml(config);
+  els.yamlOutput.value = state.pipelineYaml;
+  els.pipelineRunMode.textContent = config.runMode;
+  els.validationGate.textContent = String(config.reviewThreshold);
+  els.configStatus.textContent = config.requiredColumns.length
+    ? `${config.requiredColumns.length} required columns`
+    : "No required columns";
+  els.dryRunCommand.textContent =
+    "a2a-geo-clean config/oracle-output.yaml --run-mode dry_run";
+  els.executeCommand.textContent =
+    "a2a-geo-clean config/oracle-output.yaml --run-mode execute";
+  renderGates(config);
+}
+
+function readPipelineConfig() {
+  return {
+    projectName: valueOf(els.pipelineName),
+    runMode: valueOf(els.pipelineMode),
+    postgisTable: valueOf(els.postgisTable),
+    geometryColumn: valueOf(els.postgisGeometry),
+    idColumn: valueOf(els.pipelineIdColumn),
+    targetCrs: valueOf(els.pipelineTargetCrs),
+    requiredColumns: csvValues(els.pipelineRequiredColumns),
+    trimColumns: csvValues(els.pipelineTrimColumns),
+    auditTable: valueOf(els.auditTable),
+    reviewThreshold: Number(valueOf(els.reviewThreshold) || 0.85),
+    oracleStageTable: valueOf(els.oracleStageTable),
+    oracleTargetTable: valueOf(els.oracleTargetTable),
+    oracleSourceTable: valueOf(els.oracleSourceTable),
+    oracleKeyColumns: csvValues(els.oracleKeyColumns),
+    oracleColumns: csvValues(els.oracleColumns),
+  };
+}
+
+function buildPipelineYaml(config) {
+  return [
+    "project:",
+    `  name: ${yamlScalar(config.projectName)}`,
+    `  run_mode: ${yamlScalar(config.runMode)}`,
+    "  output_dir: ./runs/postgis-oracle-cleaning",
+    "",
+    "dataset:",
+    "  source: postgis",
+    `  table: ${yamlScalar(config.postgisTable)}`,
+    `  geometry_column: ${yamlScalar(config.geometryColumn)}`,
+    `  id_column: ${yamlScalar(config.idColumn)}`,
+    `  target_crs: ${yamlScalar(config.targetCrs)}`,
+    ...yamlListBlock("  required_columns:", config.requiredColumns),
+    "",
+    "rules:",
+    ...yamlListBlock("  string_trim_columns:", config.trimColumns),
+    "  category_maps:",
+    "    land_use:",
+    "      res: residential",
+    "      residential use: residential",
+    "      comm: commercial",
+    "      commercial use: commercial",
+    "  bounds:",
+    "    minx: -180",
+    "    miny: -90",
+    "    maxx: 180",
+    "    maxy: 90",
+    "",
+    "execution:",
+    "  engine: postgis",
+    `  audit_table: ${yamlScalar(config.auditTable)}`,
+    `  review_confidence_threshold: ${config.reviewThreshold}`,
+    "  write_cleaned_dataset: false",
+    "",
+    "output:",
+    "  sink: oracle",
+    "  mode: merge",
+    `  stage_table: ${yamlScalar(config.oracleStageTable)}`,
+    `  target_table: ${yamlScalar(config.oracleTargetTable)}`,
+    `  source_table: ${yamlScalar(config.oracleSourceTable)}`,
+    ...yamlListBlock("  key_columns:", config.oracleKeyColumns),
+    ...yamlListBlock("  columns:", config.oracleColumns),
+    "  geometry:",
+    `    column: ${yamlScalar(oracleGeometryColumn(config))}`,
+    "    source_format: wkt",
+    "    srid: 4326",
+    "",
+  ].join("\n");
+}
+
+function renderGates(config) {
+  const gates = [
+    ["Dry-run first", "Generates PostGIS and Oracle SQL plans before execution."],
+    ["Audit table", `Writes rule counts and validation checks to ${config.auditTable}.`],
+    ["Review threshold", `Rules below ${config.reviewThreshold} confidence remain visible for review.`],
+    ["Oracle merge", `Stages rows in ${config.oracleStageTable} before merging into ${config.oracleTargetTable}.`],
+  ];
+  els.gateList.textContent = "";
+  for (const [title, text] of gates) {
+    const item = document.createElement("div");
+    item.className = "rule";
+    item.innerHTML = "<strong></strong><span></span>";
+    item.querySelector("strong").textContent = title;
+    item.querySelector("span").textContent = text;
+    els.gateList.append(item);
+  }
+}
 
 function loadDataset(fileName, data) {
   if (data.type !== "FeatureCollection" || !Array.isArray(data.features)) {
@@ -641,6 +815,14 @@ function downloadJson(fileName, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
     type: "application/json",
   });
+  triggerDownload(fileName, blob);
+}
+
+function downloadText(fileName, payload, type) {
+  triggerDownload(fileName, new Blob([payload], { type }));
+}
+
+function triggerDownload(fileName, blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -678,6 +860,43 @@ async function copyText(text) {
 function cleanedFileName() {
   const stem = state.fileName.replace(/\.(geo)?json$/i, "");
   return `${stem}.cleaned.geojson`;
+}
+
+function valueOf(element) {
+  return element.value.trim();
+}
+
+function csvValues(element) {
+  return valueOf(element)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function yamlScalar(value) {
+  if (/^[A-Za-z0-9_.:/-]+$/.test(value)) return value;
+  return JSON.stringify(value);
+}
+
+function yamlListBlock(key, values) {
+  if (!values.length) return [`${key} []`];
+  return [key, ...values.map((value) => `    - ${yamlScalar(value)}`)];
+}
+
+function oracleGeometryColumn(config) {
+  return (
+    config.oracleColumns.find((column) => column.toUpperCase() === "GEOM") ||
+    config.oracleColumns.at(-1) ||
+    "GEOM"
+  );
+}
+
+function flashButton(button, text) {
+  const original = button.textContent;
+  button.textContent = text;
+  window.setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
 }
 
 function showError(message) {
