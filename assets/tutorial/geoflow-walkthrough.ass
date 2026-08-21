@@ -1,0 +1,34 @@
+[Script Info]
+Title: GeoFlow IQ Studio Walkthrough
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Title,Liberation Sans,72,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,8,90,90,70,1
+Style: Body,Liberation Sans,46,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,5,130,130,120,1
+Style: Accent,Liberation Sans,44,&H00FFFFFF,&H000000FF,&H001917D7,&H00000000,1,0,0,0,100,100,0,0,1,3,0,2,110,110,90,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:08.00,Title,,0,0,0,,GeoFlow IQ Studio
+Dialogue: 0,0:00:00.00,0:00:08.00,Body,,0,0,0,,Gcomm Oracle to IQGEO Oracle cleansing workflow
+Dialogue: 0,0:00:08.00,0:00:18.00,Title,,0,0,0,,1. Connect the Worker
+Dialogue: 0,0:00:08.00,0:00:18.00,Body,,0,0,0,,Run GeoFlow worker near Oracle\NKeep credentials and heavy processing off the browser
+Dialogue: 0,0:00:18.00,0:00:30.00,Title,,0,0,0,,2. Profile Gcomm Oracle
+Dialogue: 0,0:00:18.00,0:00:30.00,Body,,0,0,0,,Check row counts, duplicate IDs, null geometries,\Nstatus values, SRIDs, and invalid Oracle Spatial geometry
+Dialogue: 0,0:00:30.00,0:00:43.00,Title,,0,0,0,,3. Define IQGEO Rules
+Dialogue: 0,0:00:30.00,0:00:43.00,Body,,0,0,0,,Required fields, statuses, parent references,\Ngeometry rules, and field mappings become repeatable SQL checks
+Dialogue: 0,0:00:43.00,0:00:57.00,Title,,0,0,0,,4. Telecom Association Logic
+Dialogue: 0,0:00:43.00,0:00:57.00,Body,,0,0,0,,Nearest duct is not enough\NPrefer parallel alignment and flag perpendicular matches
+Dialogue: 0,0:00:57.00,0:01:10.00,Title,,0,0,0,,5. Submit Dry Run
+Dialogue: 0,0:00:57.00,0:01:10.00,Body,,0,0,0,,Generate checkpoints, progress, SQL plans,\Nand the audit trail before any write happens
+Dialogue: 0,0:01:10.00,0:01:23.00,Title,,0,0,0,,6. Split the Records
+Dialogue: 0,0:01:10.00,0:01:23.00,Body,,0,0,0,,Clean rows move forward\NReject, quarantine, and redundant rows stay auditable
+Dialogue: 0,0:01:23.00,0:01:36.00,Title,,0,0,0,,7. Approve Execute
+Dialogue: 0,0:01:23.00,0:01:36.00,Body,,0,0,0,,Execute jobs wait for operator approval\NOnly reviewed runs can merge into IQGEO
+Dialogue: 0,0:01:36.00,0:01:47.20,Title,,0,0,0,,8. Merge Trusted Rows
+Dialogue: 0,0:01:36.00,0:01:47.20,Body,,0,0,0,,Batch windows merge approved clean rows into IQGEO Oracle\NAI-assisted, rule-executed, human-approved cleansing
+Dialogue: 0,0:00:00.00,0:01:47.20,Accent,,0,0,0,,Tech Mahindra-inspired walkthrough | No Oracle credentials in browser
