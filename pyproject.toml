@@ -12,6 +12,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+a2a = [
+  "a2a-sdk[http-server]>=1.1.2",
+  "uvicorn>=0.30",
+]
 geo = [
   "geopandas>=0.14",
   "pyogrio>=0.7",
@@ -23,7 +27,7 @@ dev = [
 
 [project.scripts]
 a2a-geo-clean = "a2a_geo_cleaning.cli:main"
+a2a-geo-agent = "a2a_geo_cleaning.a2a_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

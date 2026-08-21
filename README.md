@@ -114,6 +114,63 @@ a2a-geo-clean --input data/uploads/sample.geojson
 The Claude stage is for explanation and planning. GeoPandas/Shapely still perform
 the actual cleaning operations.
 
+## Official A2A Server
+
+The project can also run as an official A2A JSON-RPC agent using Google's A2A
+Python SDK package.
+
+Install the A2A server extra:
+
+```bash
+pip install -e ".[a2a]"
+```
+
+Start the agent:
+
+```bash
+a2a-geo-agent --host 0.0.0.0 --port 8787
+```
+
+The public Agent Card is available at:
+
+```text
+http://localhost:8787/.well-known/agent-card.json
+```
+
+The JSON-RPC endpoint is:
+
+```text
+http://localhost:8787/
+```
+
+Example A2A `message/send` request:
+
+```bash
+curl -X POST http://localhost:8787/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "clean-1",
+    "method": "message/send",
+    "params": {
+      "message": {
+        "role": "user",
+        "messageId": "msg-1",
+        "parts": [
+          {
+            "kind": "text",
+            "text": "{\"input\":\"examples/sample-issues.geojson\",\"run_mode\":\"dry_run\"}"
+          }
+        ]
+      },
+      "configuration": { "returnImmediately": false }
+    }
+  }'
+```
+
+The agent returns a completed A2A task with `audit.json` and, when execution
+writes one, a cleaned GeoJSON artifact.
+
 ## Current Operations
 
 The framework includes rule contracts for:
