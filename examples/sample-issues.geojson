@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "name": "sample-parcels",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "EPSG:3857"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "parcel_id": "P-001",
+        "owner_name": "  A Khan ",
+        "land_use": "res"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-0.14, 51.5],
+            [-0.12, 51.5],
+            [-0.12, 51.52],
+            [-0.14, 51.52]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "parcel_id": "P-001",
+        "owner_name": "M Smith",
+        "land_use": "commercial use"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-0.11, 51.51]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "parcel_id": "P-003",
+        "owner_name": "",
+        "land_use": "park"
+      },
+      "geometry": null
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "parcel_id": "P-004",
+        "owner_name": "N Patel",
+        "land_use": "comm"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [392000, 6820000]
+      }
+    }
+  ]
+}
+

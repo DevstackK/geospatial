@@ -1,0 +1,43 @@
+project:
+  name: sample-cleaning
+  run_mode: execute
+  output_dir: ./runs/sample-cleaning
+
+dataset:
+  path: ./data/uploads/sample.geojson
+  layer: null
+  id_column: parcel_id
+  target_crs: EPSG:4326
+  expected_geometry_types:
+    - Polygon
+    - MultiPolygon
+  required_columns:
+    - parcel_id
+    - owner_name
+    - land_use
+
+rules:
+  string_trim_columns:
+    - owner_name
+    - land_use
+  category_maps:
+    land_use:
+      res: residential
+      residential use: residential
+      comm: commercial
+      commercial use: commercial
+  bounds:
+    minx: -180
+    miny: -90
+    maxx: 180
+    maxy: 90
+
+execution:
+  batch_size: 100000
+  review_confidence_threshold: 0.85
+  write_cleaned_dataset: true
+
+llm:
+  enabled: false
+  model: claude-sonnet-4-20250514
+  max_tokens: 1200

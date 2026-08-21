@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A2A Geo Cleaning Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">A2A Geo Cleaning</p>
+        <h1>Data issues and fixes</h1>
+      </div>
+      <div class="actions">
+        <button id="loadExample" type="button" title="Load bundled example data">
+          Example
+        </button>
+        <label class="file-button" title="Upload GeoJSON">
+          Upload
+          <input id="fileInput" type="file" accept=".geojson,.json,application/geo+json,application/json" />
+        </label>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="workspace">
+        <div class="toolbar">
+          <div>
+            <h2 id="datasetName">No dataset loaded</h2>
+            <p id="datasetMeta">Upload a GeoJSON sample or load the bundled example.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="downloadAudit" type="button" disabled>Audit JSON</button>
+            <button id="downloadCleaned" type="button" disabled>Cleaned GeoJSON</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="Dataset summary">
+          <div class="metric">
+            <span>Features</span>
+            <strong id="featureCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Issues</span>
+            <strong id="issueCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Auto-fixable</span>
+            <strong id="fixableCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Review</span>
+            <strong id="reviewCount">0</strong>
+          </div>
+        </div>
+
+        <div class="panel map-panel">
+          <div class="panel-heading">
+            <h3>Spatial preview</h3>
+            <span id="boundsLabel">No bounds</span>
+          </div>
+          <canvas id="mapCanvas" width="960" height="420"></canvas>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <h3>Issues and recommended fixes</h3>
+            <select id="severityFilter" aria-label="Filter issues by severity">
+              <option value="all">All severities</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div id="issueList" class="issue-list">
+            <p class="empty">No issues yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section class="panel how-panel">
+          <h3>How to use</h3>
+          <ol>
+            <li>Upload a GeoJSON sample or press Example.</li>
+            <li>Review each issue, affected count, and recommended fix.</li>
+            <li>Adjust ID and required columns, then re-analyze.</li>
+            <li>Download the audit or cleaned GeoJSON.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h3>Cleaning rules</h3>
+          <div id="ruleList" class="rule-list">
+            <p class="empty">Rules appear after a dataset is loaded.</p>
+          </div>
+        </section>
+
+        <section class="panel llm-panel">
+          <h3>Claude next stage</h3>
+          <p>
+            Claude can review the deterministic audit and suggest safer rule
+            changes, category mappings, and review notes. It does not edit
+            records directly.
+          </p>
+          <div class="llm-config">
+            <span>Backend key</span>
+            <strong>ANTHROPIC_API_KEY</strong>
+          </div>
+          <div class="llm-config">
+            <span>Config</span>
+            <strong>llm.enabled: true</strong>
+          </div>
+          <button id="copyClaudePrompt" type="button" disabled>Copy Claude prompt</button>
+        </section>
+
+        <section class="panel">
+          <h3>Config</h3>
+          <label>
+            ID column
+            <input id="idColumn" type="text" value="parcel_id" />
+          </label>
+          <label>
+            Required columns
+            <input id="requiredColumns" type="text" value="parcel_id, owner_name, land_use" />
+          </label>
+          <label>
+            Target CRS
+            <input id="targetCrs" type="text" value="EPSG:4326" />
+          </label>
+          <button id="reanalyze" type="button" disabled>Re-analyze</button>
+        </section>
+      </aside>
+    </main>
+
+    <template id="issueTemplate">
+      <article class="issue">
+        <div class="issue-main">
+          <div class="issue-title-row">
+            <span class="severity"></span>
+            <h4></h4>
+          </div>
+          <p class="description"></p>
+          <p class="fix"></p>
+        </div>
+        <dl>
+          <div>
+            <dt>Affected</dt>
+            <dd class="affected"></dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd class="status"></dd>
+          </div>
+        </dl>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
