@@ -13,14 +13,17 @@
         <h1>PostGIS to Oracle cleansing app</h1>
       </div>
       <div class="actions">
+        <button class="mode-button" data-view="howto" type="button">
+          How to
+        </button>
         <button class="mode-button active" data-view="pipeline" type="button">
           Pipeline
         </button>
         <button class="mode-button" data-view="iqgeo" type="button">
           IQGEO rules
         </button>
-        <button class="mode-button" data-view="howto" type="button">
-          How to
+        <button class="mode-button" data-view="dbtests" type="button">
+          DB tests
         </button>
         <button class="mode-button" data-view="inspect" type="button">
           GeoJSON inspect
@@ -344,6 +347,121 @@
       </aside>
     </main>
 
+    <main id="dbtestsView" class="pipeline-layout hidden">
+      <section class="pipeline-main">
+        <div class="toolbar">
+          <div>
+            <h2>Database pre-flight tests</h2>
+            <p>
+              Generate the checks for Gcomm Oracle and IQGEO Oracle before you
+              run cleansing or import. Keep passwords in the backend environment,
+              not in this browser.
+            </p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="downloadDbTests" type="button">Test pack</button>
+            <button id="copyDbTests" type="button">Copy tests</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="Database test summary">
+          <div class="metric">
+            <span>Source DB</span>
+            <strong>Gcomm</strong>
+          </div>
+          <div class="metric">
+            <span>Target DB</span>
+            <strong>IQGEO</strong>
+          </div>
+          <div class="metric">
+            <span>Checks</span>
+            <strong id="dbCheckCount">8</strong>
+          </div>
+          <div class="metric">
+            <span>Mode</span>
+            <strong>read-only</strong>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Connection and table settings</h3>
+            <span>Environment names only</span>
+          </div>
+          <div class="form-grid">
+            <label>
+              Gcomm DSN env var
+              <input id="gcommDsnEnv" type="text" value="GCOMM_ORACLE_DSN" />
+            </label>
+            <label>
+              IQGEO DSN env var
+              <input id="iqgeoDsnEnv" type="text" value="IQGEO_ORACLE_DSN" />
+            </label>
+            <label>
+              Gcomm user env var
+              <input id="gcommUserEnv" type="text" value="GCOMM_ORACLE_USER" />
+            </label>
+            <label>
+              IQGEO user env var
+              <input id="iqgeoUserEnv" type="text" value="IQGEO_ORACLE_USER" />
+            </label>
+            <label>
+              Gcomm source table
+              <input id="dbTestGcommTable" type="text" value="GCOMM.ASSETS" />
+            </label>
+            <label>
+              IQGEO target table
+              <input id="dbTestIqgeoTable" type="text" value="IQGEO.ASSETS" />
+            </label>
+            <label>
+              Geometry column
+              <input id="dbTestGeometryColumn" type="text" value="GEOM" />
+            </label>
+            <label>
+              ID column
+              <input id="dbTestIdColumn" type="text" value="ASSET_ID" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Generated DB test pack</h3>
+            <span>Run from backend runner</span>
+          </div>
+          <textarea id="dbTestsOutput" spellcheck="false"></textarea>
+        </section>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>What gets tested</h3>
+          <div id="dbTestCards" class="rule-list"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Expected result</h3>
+          <div class="flow-list">
+            <span>Both Oracle DSNs connect</span>
+            <span>Source and target tables exist</span>
+            <span>ID and geometry columns exist</span>
+            <span>Geometry is non-null and valid</span>
+            <span>Duplicate source IDs are counted</span>
+            <span>Redundant/status data is measurable</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Security note</h3>
+          <p class="note">
+            Do not paste database passwords into this static app. Set them on
+            the backend runner as environment variables and run the generated
+            read-only checks there.
+          </p>
+        </section>
+      </aside>
+    </main>
+
     <main id="howtoView" class="howto-layout hidden">
       <section class="howto-main">
         <div class="toolbar">
@@ -403,6 +521,13 @@
             <span>Pipeline and IQGEO rules</span>
           </div>
           <ol class="step-list">
+            <li>
+              <strong>Run DB tests first.</strong>
+              Open <code>DB tests</code>, confirm the Gcomm and IQGEO table
+              names, copy the read-only test pack, and run it from the backend
+              runner to verify connectivity, table access, IDs, status values,
+              and geometry quality.
+            </li>
             <li>
               <strong>Open IQGEO rules.</strong>
               Define Gcomm source tables, IQGEO target tables, staging tables,
@@ -482,6 +607,7 @@
           <h3>Safe production flow</h3>
           <div class="flow-list">
             <span>Load sample</span>
+            <span>Run DB pre-flight tests</span>
             <span>Define IQGEO rules</span>
             <span>Stage Gcomm rows</span>
             <span>Dry-run validation</span>

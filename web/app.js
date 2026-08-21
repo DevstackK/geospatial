@@ -10,6 +10,7 @@ const els = {
   modeButtons: document.querySelectorAll(".mode-button"),
   pipelineView: document.querySelector("#pipelineView"),
   iqgeoView: document.querySelector("#iqgeoView"),
+  dbtestsView: document.querySelector("#dbtestsView"),
   howtoView: document.querySelector("#howtoView"),
   inspectView: document.querySelector("#inspectView"),
   fileInput: document.querySelector("#fileInput"),
@@ -80,6 +81,19 @@ const els = {
   downloadIqgeoRules: document.querySelector("#downloadIqgeoRules"),
   copyIqgeoRules: document.querySelector("#copyIqgeoRules"),
   iqgeoRuleCards: document.querySelector("#iqgeoRuleCards"),
+  gcommDsnEnv: document.querySelector("#gcommDsnEnv"),
+  iqgeoDsnEnv: document.querySelector("#iqgeoDsnEnv"),
+  gcommUserEnv: document.querySelector("#gcommUserEnv"),
+  iqgeoUserEnv: document.querySelector("#iqgeoUserEnv"),
+  dbTestGcommTable: document.querySelector("#dbTestGcommTable"),
+  dbTestIqgeoTable: document.querySelector("#dbTestIqgeoTable"),
+  dbTestGeometryColumn: document.querySelector("#dbTestGeometryColumn"),
+  dbTestIdColumn: document.querySelector("#dbTestIdColumn"),
+  dbCheckCount: document.querySelector("#dbCheckCount"),
+  dbTestsOutput: document.querySelector("#dbTestsOutput"),
+  downloadDbTests: document.querySelector("#downloadDbTests"),
+  copyDbTests: document.querySelector("#copyDbTests"),
+  dbTestCards: document.querySelector("#dbTestCards"),
 };
 
 const exampleData = {
@@ -142,6 +156,11 @@ document.querySelectorAll("#iqgeoView input, #iqgeoView select").forEach((input)
   input.addEventListener("change", renderIqgeoRules);
 });
 
+document.querySelectorAll("#dbtestsView input").forEach((input) => {
+  input.addEventListener("input", renderDbTests);
+  input.addEventListener("change", renderDbTests);
+});
+
 els.downloadYaml.addEventListener("click", () =>
   downloadText("oracle-output.yaml", state.pipelineYaml, "application/x-yaml"),
 );
@@ -165,6 +184,13 @@ els.downloadIqgeoRules.addEventListener("click", () =>
 els.copyIqgeoRules.addEventListener("click", async () => {
   await copyText(els.iqgeoRulesOutput.value);
   flashButton(els.copyIqgeoRules, "Copied");
+});
+els.downloadDbTests.addEventListener("click", () =>
+  downloadText("oracle-db-tests.sql", els.dbTestsOutput.value, "text/plain"),
+);
+els.copyDbTests.addEventListener("click", async () => {
+  await copyText(els.dbTestsOutput.value);
+  flashButton(els.copyDbTests, "Copied");
 });
 
 els.fileInput.addEventListener("change", async (event) => {
@@ -202,16 +228,22 @@ els.copyClaudePrompt.addEventListener("click", async () => {
 
 renderPipeline();
 renderIqgeoRules();
+renderDbTests();
 drawEmptyMap();
 
 function setView(view) {
   const showPipeline = view === "pipeline";
   const showIqgeo = view === "iqgeo";
+  const showDbtests = view === "dbtests";
   const showHowto = view === "howto";
   els.pipelineView.classList.toggle("hidden", !showPipeline);
   els.iqgeoView.classList.toggle("hidden", !showIqgeo);
+  els.dbtestsView.classList.toggle("hidden", !showDbtests);
   els.howtoView.classList.toggle("hidden", !showHowto);
-  els.inspectView.classList.toggle("hidden", showPipeline || showIqgeo || showHowto);
+  els.inspectView.classList.toggle(
+    "hidden",
+    showPipeline || showIqgeo || showDbtests || showHowto,
+  );
   els.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
@@ -416,6 +448,119 @@ function renderIqgeoRuleCards(config) {
     item.querySelector("span").textContent = text;
     els.iqgeoRuleCards.append(item);
   }
+}
+
+function renderDbTests() {
+  const config = readDbTestConfig();
+  const checks = buildDbTestCards(config);
+  els.dbCheckCount.textContent = String(checks.length);
+  els.dbTestsOutput.value = buildDbTestPack(config);
+  els.dbTestCards.textContent = "";
+  for (const [title, text] of checks) {
+    const item = document.createElement("div");
+    item.className = "rule";
+    item.innerHTML = "<strong></strong><span></span>";
+    item.querySelector("strong").textContent = title;
+    item.querySelector("span").textContent = text;
+    els.dbTestCards.append(item);
+  }
+}
+
+function readDbTestConfig() {
+  return {
+    gcommDsnEnv: valueOf(els.gcommDsnEnv),
+    iqgeoDsnEnv: valueOf(els.iqgeoDsnEnv),
+    gcommUserEnv: valueOf(els.gcommUserEnv),
+    iqgeoUserEnv: valueOf(els.iqgeoUserEnv),
+    gcommTable: valueOf(els.dbTestGcommTable),
+    iqgeoTable: valueOf(els.dbTestIqgeoTable),
+    geometryColumn: valueOf(els.dbTestGeometryColumn),
+    idColumn: valueOf(els.dbTestIdColumn),
+  };
+}
+
+function buildDbTestCards(config) {
+  return [
+    ["Gcomm connection", `Connect with ${config.gcommDsnEnv} and ${config.gcommUserEnv}.`],
+    ["IQGEO connection", `Connect with ${config.iqgeoDsnEnv} and ${config.iqgeoUserEnv}.`],
+    ["Source table", `Confirm ${config.gcommTable} exists and is readable.`],
+    ["Target table", `Confirm ${config.iqgeoTable} exists and is readable.`],
+    ["Required columns", `Check ${config.idColumn} and ${config.geometryColumn}.`],
+    ["Geometry quality", "Count null, invalid, and zero-length geometries."],
+    ["Duplicate IDs", `Count duplicate ${config.idColumn} values in Gcomm.`],
+    ["Import risk", "Measure source rows that need reject/quarantine handling."],
+  ];
+}
+
+function buildDbTestPack(config) {
+  const source = sqlQualifiedName(config.gcommTable);
+  const target = sqlQualifiedName(config.iqgeoTable);
+  const geom = sqlIdentifier(config.geometryColumn);
+  const id = sqlIdentifier(config.idColumn);
+  return [
+    "-- Oracle database pre-flight test pack",
+    "-- Run from the backend runner. Do not paste passwords into the browser.",
+    "",
+    "-- Required environment variables:",
+    `-- export ${config.gcommDsnEnv}="gcomm-host:1521/service"`,
+    `-- export ${config.gcommUserEnv}="gcomm_user"`,
+    `-- export GCOMM_ORACLE_PASSWORD="***"`,
+    `-- export ${config.iqgeoDsnEnv}="iqgeo-host:1521/service"`,
+    `-- export ${config.iqgeoUserEnv}="iqgeo_user"`,
+    `-- export IQGEO_ORACLE_PASSWORD="***"`,
+    "",
+    "-- Python smoke test:",
+    "python -m a2a_geo_cleaning.cli config/iqgeo-rules.yaml --run-mode dry_run",
+    "",
+    "-- 1. Source table row count",
+    `SELECT COUNT(*) AS source_rows FROM ${source};`,
+    "",
+    "-- 2. Target table row count",
+    `SELECT COUNT(*) AS target_rows FROM ${target};`,
+    "",
+    "-- 3. Source ID and geometry null checks",
+    "SELECT",
+    `  SUM(CASE WHEN ${id} IS NULL THEN 1 ELSE 0 END) AS null_ids,`,
+    `  SUM(CASE WHEN ${geom} IS NULL THEN 1 ELSE 0 END) AS null_geometries`,
+    `FROM ${source};`,
+    "",
+    "-- 4. Duplicate source IDs",
+    `SELECT ${id}, COUNT(*) AS duplicate_count`,
+    `FROM ${source}`,
+    `WHERE ${id} IS NOT NULL`,
+    `GROUP BY ${id}`,
+    "HAVING COUNT(*) > 1",
+    "FETCH FIRST 50 ROWS ONLY;",
+    "",
+    "-- 5. Oracle Spatial geometry validity",
+    "SELECT validation_result, COUNT(*) AS feature_count",
+    "FROM (",
+    `  SELECT SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT(${geom}, 0.005) AS validation_result`,
+    `  FROM ${source}`,
+    `  WHERE ${geom} IS NOT NULL`,
+    ")",
+    "GROUP BY validation_result",
+    "ORDER BY feature_count DESC;",
+    "",
+    "-- 6. Geometry SRID distribution",
+    `SELECT ${geom}.SDO_SRID AS srid, COUNT(*) AS feature_count`,
+    `FROM ${source}`,
+    `WHERE ${geom} IS NOT NULL`,
+    `GROUP BY ${geom}.SDO_SRID`,
+    "ORDER BY feature_count DESC;",
+    "",
+    "-- 7. Redundant/status values to classify before IQGEO import",
+    "SELECT STATUS, COUNT(*) AS row_count",
+    `FROM ${source}`,
+    "GROUP BY STATUS",
+    "ORDER BY row_count DESC;",
+    "",
+    "-- 8. Source IDs that already exist in IQGEO target",
+    `SELECT COUNT(*) AS ids_already_in_iqgeo`,
+    `FROM ${source} s`,
+    `JOIN ${target} t ON t.${id} = s.${id};`,
+    "",
+  ].join("\n");
 }
 
 function loadDataset(fileName, data) {
@@ -1045,6 +1190,19 @@ function relationshipYaml(rules) {
     `      parent: ${yamlScalar(rule.parent)}`,
     "      on_missing: quarantine",
   ]);
+}
+
+function sqlQualifiedName(value) {
+  return value
+    .split(".")
+    .map((part) => sqlIdentifier(part.trim()))
+    .join(".");
+}
+
+function sqlIdentifier(value) {
+  const cleaned = value.trim().replace(/^"|"$/g, "");
+  if (!cleaned) return '""';
+  return `"${cleaned.replaceAll('"', '""').toUpperCase()}"`;
 }
 
 function flashButton(button, text) {
