@@ -36,12 +36,36 @@ execution:
   review_confidence_threshold: 0.85
   write_cleaned_dataset: false
 
+oracle_pipeline:
+  source_table: GCOMM.ASSETS
+  stage_table: IQGEO_STAGE.GCOMM_ASSETS_STAGE
+  clean_table: IQGEO_STAGE.GCOMM_ASSETS_CLEAN
+  reject_table: IQGEO_STAGE.GCOMM_ASSETS_REJECT
+  quarantine_table: IQGEO_STAGE.GCOMM_ASSETS_QUARANTINE
+  redundant_table: IQGEO_STAGE.GCOMM_ASSETS_REDUNDANT
+  target_table: IQGEO.ASSETS
+
+validation:
+  status_column: STATUS
+  allowed_statuses:
+    - ACTIVE
+    - PLANNED
+    - BUILT
+    - IN_SERVICE
+  redundant_statuses:
+    - RETIRED
+    - ABANDONED
+    - DUPLICATE
+    - DECOMMISSIONED
+
 output:
   sink: oracle
   mode: merge
   stage_table: IQGEO_STAGE.GCOMM_ASSETS_STAGE
+  batch_table: IQGEO_STAGE.GCOMM_ASSETS_STAGE_BATCHES
   target_table: IQGEO.ASSETS
   source_table: IQGEO_STAGE.GCOMM_ASSETS_CLEAN
+  batch_size: 100000
   key_columns:
     - ASSET_ID
   columns:
@@ -49,6 +73,11 @@ output:
     - ASSET_TYPE
     - STATUS
     - GEOM
+  field_mappings:
+    ASSET_ID: ASSET_ID
+    ASSET_TYPE: ASSET_TYPE
+    STATUS: STATUS
+    GEOM: GEOM
   geometry:
     column: GEOM
     source_format: sdo_geometry

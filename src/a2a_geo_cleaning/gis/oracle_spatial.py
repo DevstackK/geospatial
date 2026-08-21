@@ -36,6 +36,21 @@ class OracleSpatialExecutor:
                 "audit_table", f"{self.schema}.CLEANSING_AUDIT"
             )
         )
+        pipeline = state.config.get("oracle_pipeline", {})
+        self.clean_table = self._optional_qualified(pipeline.get("clean_table"))
+        self.reject_table = self._optional_qualified(pipeline.get("reject_table"))
+        self.quarantine_table = self._optional_qualified(pipeline.get("quarantine_table"))
+        self.redundant_table = self._optional_qualified(pipeline.get("redundant_table"))
+        validation = state.config.get("validation", {})
+        self.allowed_statuses = [
+            str(value).upper() for value in validation.get("allowed_statuses", [])
+        ]
+        self.redundant_statuses = [
+            str(value).upper() for value in validation.get("redundant_statuses", [])
+        ]
+        self.status_column = self._quote_identifier(
+            validation.get("status_column", "STATUS")
+        )
 
     def execute(self) -> None:
         steps = self.build_plan()
@@ -110,6 +125,7 @@ class OracleSpatialExecutor:
         steps = [self._create_audit_table_step()]
         for rule in self.state.accepted_rules:
             steps.extend(self._steps_for_rule(rule))
+        steps.extend(self._classification_steps())
         steps.extend(self._validation_steps())
         return steps
 
@@ -264,6 +280,89 @@ class OracleSpatialExecutor:
 
         return []
 
+    def _classification_steps(self) -> list[OracleSpatialSQLStep]:
+        if not any(
+            [self.clean_table, self.reject_table, self.quarantine_table, self.redundant_table]
+        ):
+            return []
+
+        invalid_geometry = (
+            f"{self.geom_column} IS NULL OR "
+            f"SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT({self.geom_column}, 0.005) <> 'TRUE'"
+        )
+        redundant_status = self._in_list_condition(
+            f"UPPER(TRIM({self.status_column}))", self.redundant_statuses
+        )
+        invalid_status = ""
+        if self.allowed_statuses:
+            accepted = self.allowed_statuses + self.redundant_statuses
+            invalid_status = (
+                f"{self.status_column} IS NOT NULL AND NOT "
+                f"{self._in_list_condition(f'UPPER(TRIM({self.status_column}))', accepted)}"
+            )
+
+        steps: list[OracleSpatialSQLStep] = []
+        if self.reject_table:
+            steps.extend(
+                self._replace_table_as_select(
+                    "build_reject_table",
+                    self.reject_table,
+                    f"{invalid_geometry}",
+                )
+            )
+        if self.redundant_table and self.redundant_statuses:
+            steps.extend(
+                self._replace_table_as_select(
+                    "build_redundant_table",
+                    self.redundant_table,
+                    redundant_status,
+                )
+            )
+        if self.quarantine_table and invalid_status:
+            steps.extend(
+                self._replace_table_as_select(
+                    "build_quarantine_table",
+                    self.quarantine_table,
+                    invalid_status,
+                )
+            )
+        if self.clean_table:
+            blocked_conditions = [f"NOT ({invalid_geometry})"]
+            if self.redundant_statuses:
+                blocked_conditions.append(f"NOT ({redundant_status})")
+            if invalid_status:
+                blocked_conditions.append(f"NOT ({invalid_status})")
+            steps.extend(
+                self._replace_table_as_select(
+                    "build_clean_table",
+                    self.clean_table,
+                    " AND ".join(blocked_conditions),
+                )
+            )
+        return steps
+
+    def _replace_table_as_select(
+        self, name: str, table: str, condition: str
+    ) -> list[OracleSpatialSQLStep]:
+        return [
+            OracleSpatialSQLStep(
+                f"drop_{name}",
+                (
+                    "BEGIN EXECUTE IMMEDIATE "
+                    f"{self._literal(f'DROP TABLE {table} PURGE')}; "
+                    "EXCEPTION WHEN OTHERS THEN IF SQLCODE != -942 THEN RAISE; END IF; END;"
+                ),
+            ),
+            OracleSpatialSQLStep(
+                name,
+                f"CREATE TABLE {table} AS SELECT * FROM {self.qualified_table} WHERE {condition}",
+            ),
+            OracleSpatialSQLStep(
+                f"audit_{name}",
+                self._insert_count_sql(name, self._literal(table), condition),
+            ),
+        ]
+
     def _create_audit_table_sql(self) -> str:
         return (
             f"CREATE TABLE {self.audit_table} ("
@@ -322,6 +421,9 @@ class OracleSpatialExecutor:
             raise OracleSpatialConfigurationError("Qualified names must be `schema.table`.")
         return ".".join(self._quote_identifier(part) for part in parts)
 
+    def _optional_qualified(self, value: str | None) -> str:
+        return self._quote_qualified(value) if value else ""
+
     def _quote_identifier(self, value: str) -> str:
         if not IDENTIFIER_RE.match(value):
             raise OracleSpatialConfigurationError(f"Unsafe Oracle identifier: {value!r}")
@@ -329,6 +431,11 @@ class OracleSpatialExecutor:
 
     def _literal(self, value: str) -> str:
         return "'" + value.replace("'", "''") + "'"
+
+    def _in_list_condition(self, expression: str, values: list[str]) -> str:
+        if not values:
+            return "1 = 0"
+        return f"{expression} IN ({', '.join(self._literal(value) for value in values)})"
 
     def _srid(self, crs: str) -> int:
         if not crs.upper().startswith("EPSG:"):

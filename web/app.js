@@ -12,6 +12,15 @@ const els = {
   workflowDropzone: document.querySelector("#workflowDropzone"),
   workflowSteps: document.querySelector("#workflowSteps"),
   resetWorkflow: document.querySelector("#resetWorkflow"),
+  workerUrl: document.querySelector("#workerUrl"),
+  workerRunMode: document.querySelector("#workerRunMode"),
+  testWorker: document.querySelector("#testWorker"),
+  profileOracle: document.querySelector("#profileOracle"),
+  submitWorkerJob: document.querySelector("#submitWorkerJob"),
+  approveWorkerJob: document.querySelector("#approveWorkerJob"),
+  workerJobId: document.querySelector("#workerJobId"),
+  workerProgressBar: document.querySelector("#workerProgressBar"),
+  workerStatus: document.querySelector("#workerStatus"),
   pipelineView: document.querySelector("#pipelineView"),
   iqgeoView: document.querySelector("#iqgeoView"),
   dbtestsView: document.querySelector("#dbtestsView"),
@@ -56,6 +65,7 @@ const els = {
   oracleSourceTable: document.querySelector("#oracleSourceTable"),
   oracleKeyColumns: document.querySelector("#oracleKeyColumns"),
   oracleColumns: document.querySelector("#oracleColumns"),
+  oracleFieldMappings: document.querySelector("#oracleFieldMappings"),
   sourceEngine: document.querySelector("#sourceEngine"),
   validationEngineLabel: document.querySelector("#validationEngineLabel"),
   outputSink: document.querySelector("#outputSink"),
@@ -254,6 +264,10 @@ els.copyClaudePrompt.addEventListener("click", async () => {
     els.copyClaudePrompt.textContent = "Copy Claude prompt";
   }, 1200);
 });
+els.testWorker.addEventListener("click", testWorkerHealth);
+els.profileOracle.addEventListener("click", profileOracleFromWorker);
+els.submitWorkerJob.addEventListener("click", submitWorkerJob);
+els.approveWorkerJob.addEventListener("click", approveWorkerJob);
 
 renderPipeline();
 renderIqgeoRules();
@@ -449,6 +463,7 @@ function readPipelineConfig() {
     oracleSourceTable: valueOf(els.oracleSourceTable),
     oracleKeyColumns: csvValues(els.oracleKeyColumns),
     oracleColumns: csvValues(els.oracleColumns),
+    oracleFieldMappings: mappingValues(els.oracleFieldMappings),
   };
 }
 
@@ -530,15 +545,159 @@ function buildOutputYaml(config) {
     `  target_system: ${config.targetEngine === "oracle_iqgeo" ? "iqgeo" : "oracle"}`,
     "  mode: merge",
     `  stage_table: ${yamlScalar(config.oracleStageTable)}`,
+    `  batch_table: ${yamlScalar(config.oracleStageTable + "_BATCHES")}`,
     `  target_table: ${yamlScalar(config.oracleTargetTable)}`,
     `  source_table: ${yamlScalar(config.oracleSourceTable)}`,
     ...yamlListBlock("  key_columns:", config.oracleKeyColumns),
     ...yamlListBlock("  columns:", config.oracleColumns),
+    "  field_mappings:",
+    ...yamlMapBlock(config.oracleFieldMappings, "    "),
+    `  batch_size: 100000`,
     "  geometry:",
     `    column: ${yamlScalar(oracleGeometryColumn(config))}`,
     "    source_format: sdo_geometry",
     "    srid: 4326",
   ];
+}
+
+async function testWorkerHealth() {
+  await workerRequest("/health", { method: "GET" });
+}
+
+async function profileOracleFromWorker() {
+  const config = readPipelineConfig();
+  await workerRequest("/api/oracle/profile", {
+    method: "POST",
+    body: {
+      dry_run: true,
+      table: config.postgisTable,
+      geometry_column: config.geometryColumn,
+      id_column: config.idColumn,
+      status_column: "STATUS",
+      srid: Number((config.targetCrs || "EPSG:4326").split(":").pop()) || 4326,
+    },
+  });
+}
+
+async function submitWorkerJob() {
+  const config = yamlToWorkerConfig(readPipelineConfig());
+  const response = await workerRequest("/api/jobs", {
+    method: "POST",
+    body: {
+      config,
+      run_mode: valueOf(els.workerRunMode),
+    },
+  });
+  if (response?.id) {
+    els.workerJobId.value = response.id;
+    pollWorkerJob(response.id);
+  }
+}
+
+async function approveWorkerJob() {
+  const jobId = valueOf(els.workerJobId);
+  if (!jobId) {
+    renderWorkerStatus({ error: "Enter a job ID first." });
+    return;
+  }
+  await workerRequest(`/api/jobs/${encodeURIComponent(jobId)}/approve`, {
+    method: "POST",
+    body: { operator: "ui-operator" },
+  });
+  pollWorkerJob(jobId);
+}
+
+async function pollWorkerJob(jobId) {
+  const response = await workerRequest(`/api/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+  });
+  if (response && !["completed", "failed", "awaiting_approval"].includes(response.status)) {
+    window.setTimeout(() => pollWorkerJob(jobId), 1400);
+  }
+}
+
+async function workerRequest(path, options) {
+  const baseUrl = valueOf(els.workerUrl).replace(/\/$/, "");
+  const fetchOptions = { method: options.method };
+  if (options.body) {
+    fetchOptions.headers = { "Content-Type": "application/json" };
+    fetchOptions.body = JSON.stringify(options.body);
+  }
+  try {
+    const response = await fetch(`${baseUrl}${path}`, fetchOptions);
+    const data = await response.json();
+    renderWorkerStatus(data);
+    return data;
+  } catch (error) {
+    renderWorkerStatus({ error: error.message });
+    return null;
+  }
+}
+
+function renderWorkerStatus(data) {
+  const progress = Number(data?.progress || 0);
+  els.workerProgressBar.style.width = `${Math.max(0, Math.min(100, progress))}%`;
+  els.workerStatus.textContent = JSON.stringify(data, null, 2);
+}
+
+function yamlToWorkerConfig(config) {
+  return {
+    project: {
+      name: config.projectName,
+      run_mode: valueOf(els.workerRunMode),
+      output_dir: "./runs/gcomm-iqgeo-cleansing",
+    },
+    dataset: {
+      source: config.sourceEngine,
+      table: config.postgisTable,
+      geometry_column: config.geometryColumn,
+      id_column: config.idColumn,
+      target_crs: config.targetCrs,
+      required_columns: config.requiredColumns,
+    },
+    rules: {
+      string_trim_columns: config.trimColumns,
+      category_maps: {},
+      bounds: { minx: -180, miny: -90, maxx: 180, maxy: 90 },
+    },
+    execution: {
+      engine: config.validationEngine,
+      audit_table: config.auditTable,
+      review_confidence_threshold: config.reviewThreshold,
+      write_cleaned_dataset: false,
+    },
+    oracle_pipeline: {
+      source_table: config.postgisTable,
+      stage_table: config.oracleStageTable,
+      clean_table: config.oracleSourceTable,
+      reject_table: config.oracleSourceTable.replace(/_CLEAN$/i, "_REJECT"),
+      quarantine_table: config.oracleSourceTable.replace(/_CLEAN$/i, "_QUARANTINE"),
+      redundant_table: config.oracleSourceTable.replace(/_CLEAN$/i, "_REDUNDANT"),
+      target_table: config.oracleTargetTable,
+    },
+    validation: {
+      status_column: "STATUS",
+      allowed_statuses: ["ACTIVE", "PLANNED", "BUILT", "IN_SERVICE"],
+      redundant_statuses: ["RETIRED", "ABANDONED", "DUPLICATE", "DECOMMISSIONED"],
+    },
+    output: {
+      sink: config.targetEngine === "file" ? "file" : "oracle",
+      mode: "merge",
+      stage_table: config.oracleStageTable,
+      batch_table: `${config.oracleStageTable}_BATCHES`,
+      target_table: config.oracleTargetTable,
+      source_table: config.oracleSourceTable,
+      key_columns: config.oracleKeyColumns,
+      columns: config.oracleColumns,
+      field_mappings: config.oracleFieldMappings,
+      batch_size: 100000,
+      geometry: {
+        column: oracleGeometryColumn(config),
+        source_format: "sdo_geometry",
+        srid: 4326,
+      },
+    },
+  };
 }
 
 function renderGates(config) {
@@ -1479,6 +1638,19 @@ function csvValues(element) {
     .filter(Boolean);
 }
 
+function mappingValues(element) {
+  return Object.fromEntries(
+    valueOf(element)
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => {
+        const [target, source] = value.split("=").map((part) => part.trim());
+        return [target, source || target];
+      }),
+  );
+}
+
 function yamlScalar(value) {
   if (/^[A-Za-z0-9_.:/-]+$/.test(value)) return value;
   return JSON.stringify(value);
@@ -1488,6 +1660,12 @@ function yamlListBlock(key, values) {
   if (!values.length) return [`${key} []`];
   const indent = " ".repeat((key.match(/^ */)?.[0].length || 0) + 2);
   return [key, ...values.map((value) => `${indent}- ${yamlScalar(value)}`)];
+}
+
+function yamlMapBlock(values, indent = "") {
+  const entries = Object.entries(values);
+  if (!entries.length) return [`${indent}{}`];
+  return entries.map(([key, value]) => `${indent}${yamlScalar(key)}: ${yamlScalar(value)}`);
 }
 
 function oracleGeometryColumn(config) {

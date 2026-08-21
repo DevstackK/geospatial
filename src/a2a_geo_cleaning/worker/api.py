@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from a2a_geo_cleaning.cli import load_config, load_env_file
-from a2a_geo_cleaning.worker.jobs import InMemoryJobStore
+from a2a_geo_cleaning.worker.jobs import SQLiteJobStore
 from a2a_geo_cleaning.worker.oracle_introspection import OracleIntrospector
 
 
@@ -23,7 +23,7 @@ def json_error(message: str, status_code: int = 400) -> JSONResponse:
 class GeoFlowWorkerAPI:
     def __init__(self, default_config: Path, output_root: Path) -> None:
         self.default_config = default_config
-        self.jobs = InMemoryJobStore(output_root=output_root)
+        self.jobs = SQLiteJobStore(output_root=output_root)
         self.oracle = OracleIntrospector()
 
     async def health(self, request: Request) -> JSONResponse:
@@ -54,6 +54,23 @@ class GeoFlowWorkerAPI:
         if job is None:
             return json_error("Job not found.", status_code=404)
         return JSONResponse({"job_id": job.id, "events": job.events})
+
+    async def approve_job(self, request: Request) -> JSONResponse:
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        operator = payload.get("operator", "operator") if isinstance(payload, dict) else "operator"
+        job = self.jobs.approve(request.path_params["job_id"], operator=operator)
+        if job is None:
+            return json_error("Job not found.", status_code=404)
+        return JSONResponse(job.snapshot())
+
+    async def resume_job(self, request: Request) -> JSONResponse:
+        job = self.jobs.resume(request.path_params["job_id"])
+        if job is None:
+            return json_error("Job not found.", status_code=404)
+        return JSONResponse(job.snapshot())
 
     async def profile_oracle(self, request: Request) -> JSONResponse:
         try:
@@ -86,6 +103,8 @@ def build_app(
         Route("/api/jobs", api.list_jobs, methods=["GET"]),
         Route("/api/jobs/{job_id}", api.get_job, methods=["GET"]),
         Route("/api/jobs/{job_id}/events", api.get_job_events, methods=["GET"]),
+        Route("/api/jobs/{job_id}/approve", api.approve_job, methods=["POST"]),
+        Route("/api/jobs/{job_id}/resume", api.resume_job, methods=["POST"]),
         Route("/api/oracle/profile", api.profile_oracle, methods=["POST"]),
     ]
     return Starlette(

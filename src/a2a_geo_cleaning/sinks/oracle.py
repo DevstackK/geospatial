@@ -33,10 +33,18 @@ class OracleSink:
             raise OracleConfigurationError("output.mode must be `staging` or `merge`.")
 
         self.stage_table = self._quote_qualified(self.config["stage_table"])
+        self.batch_table = self._quote_qualified(
+            self.config.get("batch_table", f"{self.config['stage_table']}_BATCHES")
+        )
         self.target_table = self._quote_qualified(self.config.get("target_table", ""))
         self.source_table = self._quote_qualified(self.config.get("source_table", ""))
         self.key_columns = [self._quote_identifier(col) for col in self.config["key_columns"]]
         self.columns = [self._quote_identifier(col) for col in self.config["columns"]]
+        self.field_mappings = {
+            self._quote_identifier(target): self._quote_identifier(source)
+            for target, source in self.config.get("field_mappings", {}).items()
+        }
+        self.batch_size = int(self.config.get("batch_size", 100000))
         self.geometry = self.config.get("geometry")
 
     def publish(self) -> None:
@@ -93,6 +101,7 @@ class OracleSink:
         if self.mode == "merge":
             if not self.target_table:
                 raise OracleConfigurationError("output.target_table is required for merge mode.")
+            steps.append(self._batch_window_step())
             steps.append(self._merge_step())
         return steps
 
@@ -142,12 +151,26 @@ class OracleSink:
         return OracleSQLStep(
             "merge_stage_into_oracle_target",
             (
+                f"-- Batch window size: {self.batch_size}. "
+                "Run repeated keyed windows for very large imports. "
                 f"MERGE INTO {self.target_table} target "
                 f"USING {self.stage_table} source "
                 f"ON ({on_clause}) "
                 f"WHEN MATCHED THEN UPDATE SET {updates} "
                 f"WHEN NOT MATCHED THEN INSERT ({self.column_list}) "
                 f"VALUES ({insert_values})"
+            ),
+        )
+
+    def _batch_window_step(self) -> OracleSQLStep:
+        key_list = ", ".join(self.key_columns)
+        return OracleSQLStep(
+            "build_oracle_batch_windows",
+            (
+                f"CREATE TABLE {self.batch_table} AS "
+                "SELECT CEIL(ROW_NUMBER() OVER (ORDER BY "
+                f"{key_list}) / {self.batch_size}) AS BATCH_NO, "
+                f"{key_list} FROM {self.stage_table}"
             ),
         )
 
@@ -158,10 +181,11 @@ class OracleSink:
     def select_list_from_source(self) -> str:
         selected = []
         for column in self.columns:
+            source_column = self.field_mappings.get(column, column)
             if self.geometry and column == self._quote_identifier(self.geometry["column"]):
-                selected.append(self._geometry_expression(column))
+                selected.append(f"{self._geometry_expression(source_column)} AS {column}")
             else:
-                selected.append(column)
+                selected.append(f"{source_column} AS {column}")
         return ", ".join(selected)
 
     def _geometry_expression(self, column: str) -> str:

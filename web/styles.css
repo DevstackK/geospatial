@@ -324,6 +324,43 @@ dd {
   color: #fff;
 }
 
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress-shell {
+  height: 10px;
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #edf2e9;
+}
+
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  background: #204f41;
+  transition: width 180ms ease;
+}
+
+.status-log {
+  max-height: 260px;
+  margin: 12px 0 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f6faf4;
+  color: #1f3f35;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .metric,
 .panel {
   background: var(--panel);

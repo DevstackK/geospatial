@@ -400,6 +400,20 @@ curl http://localhost:8788/api/jobs/<job_id>
 curl http://localhost:8788/api/jobs/<job_id>/events
 ```
 
+Approve an execute job after reviewing dry-run output:
+
+```bash
+curl -X POST http://localhost:8788/api/jobs/<job_id>/approve \
+  -H "Content-Type: application/json" \
+  -d '{"operator":"your-name"}'
+```
+
+Resume a failed or interrupted job:
+
+```bash
+curl -X POST http://localhost:8788/api/jobs/<job_id>/resume
+```
+
 Generate a live Oracle profile or a dry-run profile plan:
 
 ```bash
@@ -424,9 +438,67 @@ export GCOMM_ORACLE_USER="gcomm_user"
 export GCOMM_ORACLE_PASSWORD="your_password"
 ```
 
-The first worker version uses an in-memory job store. That is good for pilot
-testing. For production HA, replace it with Postgres/Redis-backed persistence
-and a queue before multiple workers process the same job stream.
+The worker stores job state in SQLite under `runs/jobs/jobs.sqlite3`. That gives
+pilot deployments persistent status, checkpoints, progress, approval state, and
+resume support after failures. For production HA, move the same job contract to
+Postgres/Redis/SQS before running multiple workers.
+
+## Field Mapping And Classification
+
+Use `field_mappings` when Gcomm source column names differ from IQGEO target
+column names:
+
+```yaml
+output:
+  sink: oracle
+  mode: merge
+  source_table: IQGEO_STAGE.GCOMM_ASSETS_CLEAN
+  target_table: IQGEO.ASSETS
+  field_mappings:
+    ASSET_ID: GCOMM_ASSET_ID
+    ASSET_TYPE: GCOMM_TYPE
+    STATUS: LIFECYCLE_STATUS
+    GEOM: GEOM
+  batch_size: 100000
+```
+
+Use `oracle_pipeline` and `validation` to create the split tables before import:
+
+```yaml
+oracle_pipeline:
+  clean_table: IQGEO_STAGE.GCOMM_ASSETS_CLEAN
+  reject_table: IQGEO_STAGE.GCOMM_ASSETS_REJECT
+  quarantine_table: IQGEO_STAGE.GCOMM_ASSETS_QUARANTINE
+  redundant_table: IQGEO_STAGE.GCOMM_ASSETS_REDUNDANT
+
+validation:
+  status_column: STATUS
+  allowed_statuses: [ACTIVE, PLANNED, BUILT, IN_SERVICE]
+  redundant_statuses: [RETIRED, ABANDONED, DUPLICATE, DECOMMISSIONED]
+```
+
+The Oracle dry-run plan now includes set-based SQL to build clean, reject,
+quarantine, and redundant tables. Execute mode should only run after the
+operator reviews the dry-run audit and approves the job.
+
+## End-To-End Video Guide
+
+Use this as the operator training video script:
+
+1. Open GeoFlow IQ Studio and explain the path:
+   `Gcomm Oracle -> validate -> classify -> IQGEO Oracle`.
+2. Start `geoflow-worker` near Oracle and paste the worker URL into Studio.
+3. Press Health to prove the UI can reach the worker.
+4. Press Profile to generate or run Oracle profiling checks.
+5. Open IQGEO rules and set required fields, allowed statuses, redundant
+   statuses, geometry rules, and parent references.
+6. Open Pipeline and set source, target, stage, clean, reject, quarantine,
+   redundant tables, field mappings, and batch size.
+7. Submit a dry-run job and review progress, checkpoints, SQL plan, and audit.
+8. Submit execute mode only after sign-off; show the awaiting approval state.
+9. Press Approve and explain that only approved clean rows merge into IQGEO.
+10. Close by showing rejected, quarantined, redundant, fixed, and approved counts
+    in the audit output.
 
 ## Optional Claude Planner
 

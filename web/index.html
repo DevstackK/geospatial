@@ -165,6 +165,38 @@
         </section>
 
         <section class="panel">
+          <h3>
+            Worker connection
+            <button class="info-button" type="button" title="Point this at the secured GeoFlow worker running near Oracle. The browser calls the worker API; it never stores Oracle passwords.">i</button>
+          </h3>
+          <label>
+            Worker URL
+            <input id="workerUrl" type="url" value="http://localhost:8788" />
+          </label>
+          <label>
+            Job mode
+            <select id="workerRunMode">
+              <option value="dry_run">dry_run</option>
+              <option value="execute">execute</option>
+            </select>
+          </label>
+          <div class="button-grid">
+            <button id="testWorker" type="button">Health</button>
+            <button id="profileOracle" type="button">Profile</button>
+            <button id="submitWorkerJob" type="button">Submit</button>
+            <button id="approveWorkerJob" type="button">Approve</button>
+          </div>
+          <label>
+            Job ID
+            <input id="workerJobId" type="text" placeholder="Created after submit" />
+          </label>
+          <div class="progress-shell">
+            <div id="workerProgressBar" class="progress-bar"></div>
+          </div>
+          <pre id="workerStatus" class="status-log">Worker not connected.</pre>
+        </section>
+
+        <section class="panel">
           <h3>Why faster than generic ETL</h3>
           <p class="note">
             For 8 million records, speed comes from set-based Oracle queries,
@@ -309,6 +341,10 @@
             <label class="wide">
               Oracle columns
               <input id="oracleColumns" type="text" value="ASSET_ID, ASSET_TYPE, STATUS, GEOM" />
+            </label>
+            <label class="wide">
+              Field mappings
+              <input id="oracleFieldMappings" type="text" value="ASSET_ID=ASSET_ID, ASSET_TYPE=ASSET_TYPE, STATUS=STATUS, GEOM=GEOM" />
             </label>
           </div>
         </section>
@@ -1015,6 +1051,58 @@
             <code>curl -X POST http://localhost:8788/api/jobs -H "Content-Type: application/json" -d '{"config_path":"config/gcomm-iqgeo.oracle.yaml","run_mode":"dry_run"}'</code>
             <code>curl http://localhost:8788/api/jobs/&lt;job_id&gt;/events</code>
           </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              End-to-end video guide
+              <button class="info-button" type="button" title="Use this script to record a training video or walk an operator through the complete dry-run to approved import process.">i</button>
+            </h3>
+            <span>Operator walkthrough</span>
+          </div>
+          <ol class="step-list">
+            <li>
+              <strong>Opening: what GeoFlow IQ does.</strong>
+              Show Studio and explain the controlled path:
+              <code>Gcomm Oracle -> validate -> classify -> IQGEO Oracle</code>.
+            </li>
+            <li>
+              <strong>Connect the worker.</strong>
+              Start <code>geoflow-worker</code>, paste the worker URL, press
+              Health, then explain that Oracle credentials stay on the worker.
+            </li>
+            <li>
+              <strong>Profile Gcomm Oracle.</strong>
+              Press Profile and review row count, duplicate IDs, SRID spread,
+              null geometry, invalid geometry, and status distribution.
+            </li>
+            <li>
+              <strong>Define IQGEO rules.</strong>
+              Open IQGEO rules, show required fields, allowed statuses,
+              redundant statuses, geometry rules, and parent references.
+            </li>
+            <li>
+              <strong>Map fields.</strong>
+              Open Pipeline and show Gcomm-to-IQGEO field mappings,
+              stage/clean/reject/quarantine/redundant tables, and batch size.
+            </li>
+            <li>
+              <strong>Submit dry-run.</strong>
+              In Studio, submit dry-run and watch status, progress, checkpoints,
+              SQL plan, audit output, and generated classification tables.
+            </li>
+            <li>
+              <strong>Approve execute.</strong>
+              Change mode to execute, submit, show awaiting approval, press
+              Approve, then explain that only approved clean rows merge to IQGEO.
+            </li>
+            <li>
+              <strong>Close with audit.</strong>
+              Show the audit trail: rejected, quarantined, redundant,
+              fixed/approved counts, and the final IQGEO merge evidence.
+            </li>
+          </ol>
         </section>
       </section>
 

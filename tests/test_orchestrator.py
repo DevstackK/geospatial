@@ -176,6 +176,17 @@ def test_oracle_spatial_dry_run_generates_validation_plan(tmp_path: Path) -> Non
             "audit_table": "IQGEO_STAGE.CLEANSING_AUDIT",
             "review_confidence_threshold": 0.85,
         },
+        "oracle_pipeline": {
+            "clean_table": "IQGEO_STAGE.GCOMM_ASSETS_CLEAN",
+            "reject_table": "IQGEO_STAGE.GCOMM_ASSETS_REJECT",
+            "quarantine_table": "IQGEO_STAGE.GCOMM_ASSETS_QUARANTINE",
+            "redundant_table": "IQGEO_STAGE.GCOMM_ASSETS_REDUNDANT",
+        },
+        "validation": {
+            "status_column": "STATUS",
+            "allowed_statuses": ["ACTIVE", "PLANNED"],
+            "redundant_statuses": ["RETIRED"],
+        },
     }
 
     state = CleaningOrchestrator(config).run()
@@ -188,6 +199,10 @@ def test_oracle_spatial_dry_run_generates_validation_plan(tmp_path: Path) -> Non
     assert "SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT" in sql
     assert "ALL_TAB_COLUMNS" in sql
     assert 'UPDATE "GCOMM"."ASSETS" SET "STATUS" = TRIM("STATUS")' in sql
+    assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_CLEAN" AS SELECT *' in sql
+    assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_REJECT" AS SELECT *' in sql
+    assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_QUARANTINE" AS SELECT *' in sql
+    assert 'CREATE TABLE "IQGEO_STAGE"."GCOMM_ASSETS_REDUNDANT" AS SELECT *' in sql
     assert "DBMS_STATS.GATHER_TABLE_STATS" in sql
     assert (tmp_path / "audit.json").exists()
 
@@ -216,10 +231,16 @@ def test_oracle_sink_dry_run_generates_merge_plan(tmp_path: Path) -> None:
             "sink": "oracle",
             "mode": "merge",
             "stage_table": "GIS.PARCELS_CLEANED_STAGE",
+            "batch_table": "GIS.PARCELS_CLEANED_STAGE_BATCHES",
             "target_table": "GIS.PARCELS",
             "source_table": "PUBLIC.PARCELS_CLEANED_EXPORT",
             "key_columns": ["PARCEL_ID"],
             "columns": ["PARCEL_ID", "OWNER_NAME", "LAND_USE", "GEOM"],
+            "field_mappings": {
+                "PARCEL_ID": "SRC_PARCEL_ID",
+                "OWNER_NAME": "SRC_OWNER",
+            },
+            "batch_size": 50000,
             "geometry": {"column": "GEOM", "source_format": "wkt", "srid": 4326},
         },
     }
@@ -231,6 +252,11 @@ def test_oracle_sink_dry_run_generates_merge_plan(tmp_path: Path) -> None:
     assert oracle_log["status"] == "dry_run"
     assert oracle_log["mode"] == "merge"
     assert 'CREATE TABLE "GIS"."PARCELS_CLEANED_STAGE"' in sql
+    assert '"SRC_PARCEL_ID" AS "PARCEL_ID"' in sql
+    assert '"SRC_OWNER" AS "OWNER_NAME"' in sql
+    assert 'CREATE TABLE "GIS"."PARCELS_CLEANED_STAGE_BATCHES" AS' in sql
+    assert "BATCH_NO" in sql
+    assert "Batch window size: 50000" in sql
     assert 'MERGE INTO "GIS"."PARCELS" target' in sql
     assert 'USING "GIS"."PARCELS_CLEANED_STAGE" source' in sql
     assert "SDO_UTIL.FROM_WKTGEOMETRY" in sql

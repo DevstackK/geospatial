@@ -69,3 +69,26 @@ def test_worker_job_store_runs_oracle_dry_run(tmp_path: Path) -> None:
     assert current.result["accepted_rule_count"] > 0
     assert current.result["execution_log"][0]["engine"] == "oracle_spatial"
     assert (tmp_path / job.id / "audit.json").exists()
+
+
+def test_worker_persists_jobs_and_requires_approval_for_execute(tmp_path: Path) -> None:
+    config = {
+        "project": {"name": "approval-test", "run_mode": "execute"},
+        "dataset": {
+            "source": "oracle",
+            "table": "GCOMM.ASSETS",
+            "geometry_column": "GEOM",
+            "id_column": "ASSET_ID",
+        },
+    }
+    jobs = InMemoryJobStore(output_root=tmp_path, max_workers=1)
+    job = jobs.submit(config)
+
+    assert job.status == "awaiting_approval"
+    assert job.requires_approval is True
+
+    reloaded = InMemoryJobStore(output_root=tmp_path, max_workers=1)
+    persisted = reloaded.get(job.id)
+    assert persisted is not None
+    assert persisted.status == "awaiting_approval"
+    assert persisted.events[-1]["status"] == "awaiting_approval"
