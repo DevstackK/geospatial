@@ -656,6 +656,54 @@
 
         <section class="panel">
           <div class="panel-heading">
+            <h3>
+              Best ways to connect the databases
+              <button class="info-button" type="button" title="The safest setup keeps Oracle credentials on a backend runner inside the same network or VPN as Gcomm and IQGEO.">i</button>
+            </h3>
+            <span>Recommended architecture</span>
+          </div>
+          <div class="check-grid">
+            <article>
+              <strong>1. Backend runner near Oracle</strong>
+              <p>
+                Best option. Run the Python cleaner on a VM, Cloud Run, ECS,
+                Render worker, or internal server that can reach both Gcomm
+                Oracle and IQGEO Oracle over private networking or VPN.
+              </p>
+              <code>recommended for production</code>
+            </article>
+            <article>
+              <strong>2. Internal network or VPN</strong>
+              <p>
+                Keep Oracle closed to the public internet. Allow the backend
+                runner through VPN, private subnet, bastion, or fixed egress IP
+                rules.
+              </p>
+              <code>private access only</code>
+            </article>
+            <article>
+              <strong>3. Vercel as UI only</strong>
+              <p>
+                Use Vercel to host this app and generate configs. Do not put
+                Oracle passwords in the browser and do not run long migration
+                jobs in frontend code.
+              </p>
+              <code>config UI, not DB runner</code>
+            </article>
+            <article>
+              <strong>4. Local operator mode</strong>
+              <p>
+                Useful for first tests. Run the backend from a laptop or desktop
+                already connected to the client VPN, then move to a server once
+                rules are proven.
+              </p>
+              <code>good for pilot testing</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
             <h3>Commands</h3>
             <span>Backend runner</span>
           </div>
@@ -693,6 +741,17 @@
               <dd>Runs validation, audit, reject/redundant splits, and Oracle import.</dd>
             </div>
           </dl>
+        </section>
+
+        <section class="panel">
+          <h3>DB connection options</h3>
+          <div class="flow-list">
+            <span>Best: backend runner inside Oracle network</span>
+            <span>Good: backend runner over VPN/private subnet</span>
+            <span>Pilot: local runner on client VPN</span>
+            <span>Avoid: Oracle credentials in browser</span>
+            <span>Avoid: large imports in Vercel serverless</span>
+          </div>
         </section>
 
         <section class="panel">
