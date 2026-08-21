@@ -109,6 +109,12 @@ For real geospatial file processing:
 pip install -e ".[geo]"
 ```
 
+For large PostGIS-backed cleaning jobs:
+
+```bash
+pip install -e ".[postgis]"
+```
+
 For the official A2A server:
 
 ```bash
@@ -151,6 +157,12 @@ For a quick dry-run against the included sample:
 
 ```bash
 a2a-geo-clean --input examples/sample-issues.geojson --run-mode dry_run
+```
+
+For a PostGIS SQL-plan dry-run:
+
+```bash
+a2a-geo-clean config/postgis.example.yaml --run-mode dry_run
 ```
 
 ## Frontend
@@ -319,6 +331,47 @@ For production, keep the same pattern:
 
 ## Scaling To 8M Records
 
-Use this framework as the control plane. For large datasets, use PostGIS,
-DuckDB Spatial, or partitioned GeoParquet as the execution plane. Agents should
-exchange summaries and rule proposals, not raw record payloads.
+Use this framework as the control plane. For large datasets, use PostGIS as the
+execution plane. Agents should exchange summaries and rule proposals, not raw
+record payloads.
+
+The project includes a PostGIS execution mode for this:
+
+```yaml
+dataset:
+  source: postgis
+  table: public.parcels
+  geometry_column: geom
+  id_column: parcel_id
+  target_crs: EPSG:4326
+
+execution:
+  engine: postgis
+  audit_table: public.cleaning_audit
+  batch_size: 100000
+```
+
+In `dry_run` mode, the agent generates an auditable SQL plan without touching
+the database. In `execute` mode, it runs the generated SQL against
+`execution.database_url`, `DATABASE_URL`, or `POSTGIS_DATABASE_URL`.
+
+Example:
+
+```bash
+export POSTGIS_DATABASE_URL="postgresql://user:password@localhost:5432/geodata"
+a2a-geo-clean config/postgis.example.yaml --run-mode execute
+```
+
+The generated PostGIS plan uses database-native operations such as:
+
+- `ST_Transform` for CRS normalization
+- `ST_MakeValid` for invalid geometries
+- `DELETE ... WHERE ST_IsEmpty(...)` for empty geometries
+- SQL `btrim(...)` for string cleanup
+- `CASE` expressions for category normalization
+- `GROUP BY ... HAVING COUNT(*) > 1` for duplicate flags
+- audit-table inserts for counts and review evidence
+
+For 8M records, keep the browser out of the execution path. Use the browser only
+for small samples and previews. Use the A2A server or CLI to plan the cleansing
+job, and let PostGIS apply rules close to the data.

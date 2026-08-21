@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from a2a_geo_cleaning.contracts import CleaningRule, RuleType, WorkflowState
+from a2a_geo_cleaning.gis.postgis import PostGISExecutor
 
 
 class GeoDependencyError(RuntimeError):
@@ -15,6 +16,10 @@ class GeoExecutor:
         self.state = state
 
     def execute(self) -> None:
+        if self.state.config["dataset"].get("source") == "postgis":
+            PostGISExecutor(self.state).execute()
+            return
+
         run_mode = self.state.config["project"].get("run_mode", "dry_run")
         if run_mode == "dry_run":
             self.state.execution_log.append(
@@ -143,4 +148,3 @@ class GeoExecutor:
             return gdf
 
         return gdf
-

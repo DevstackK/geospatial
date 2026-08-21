@@ -65,15 +65,17 @@ def apply_cli_overrides(
     output_dir: Path | None,
 ) -> dict:
     updated = deepcopy(config)
-    selected_input = input_path or find_latest_upload(uploads_dir)
-    selected_input = selected_input.expanduser().resolve()
-
     project = updated.setdefault("project", {})
     dataset = updated.setdefault("dataset", {})
+    is_postgis = dataset.get("source") == "postgis"
 
-    dataset["path"] = str(selected_input)
-    if selected_input.suffix.lower() != ".gpkg":
-        dataset["layer"] = dataset.get("layer") if input_path is None else None
+    selected_input = None
+    if not is_postgis or input_path:
+        selected_input = input_path or find_latest_upload(uploads_dir)
+        selected_input = selected_input.expanduser().resolve()
+        dataset["path"] = str(selected_input)
+        if selected_input.suffix.lower() != ".gpkg":
+            dataset["layer"] = dataset.get("layer") if input_path is None else None
 
     if run_mode:
         project["run_mode"] = run_mode
@@ -82,12 +84,18 @@ def apply_cli_overrides(
 
     if output_dir:
         project["output_dir"] = str(output_dir.expanduser().resolve())
+    elif is_postgis:
+        table_name = str(dataset.get("table", "postgis-dataset")).split(".")[-1]
+        project["output_dir"] = str(Path("runs") / f"{table_name}-cleaning")
     else:
         project["output_dir"] = str(
             Path("runs") / f"{selected_input.stem}-cleaning"
         )
 
-    project["name"] = project.get("name") or f"{selected_input.stem}-cleaning"
+    if selected_input:
+        project["name"] = project.get("name") or f"{selected_input.stem}-cleaning"
+    else:
+        project["name"] = project.get("name") or f"{dataset.get('table')}-cleaning"
     return updated
 
 

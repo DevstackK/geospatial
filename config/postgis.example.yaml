@@ -1,0 +1,41 @@
+project:
+  name: parcels-postgis-cleaning
+  run_mode: dry_run
+  output_dir: ./runs/parcels-postgis-cleaning
+
+dataset:
+  source: postgis
+  table: public.parcels
+  geometry_column: geom
+  id_column: parcel_id
+  target_crs: EPSG:4326
+  expected_geometry_types:
+    - Polygon
+    - MultiPolygon
+  required_columns:
+    - parcel_id
+    - owner_name
+    - land_use
+
+rules:
+  string_trim_columns:
+    - owner_name
+    - land_use
+  category_maps:
+    land_use:
+      res: residential
+      residential use: residential
+      comm: commercial
+      commercial use: commercial
+  bounds:
+    minx: -180
+    miny: -90
+    maxx: 180
+    maxy: 90
+
+execution:
+  engine: postgis
+  batch_size: 100000
+  audit_table: public.cleaning_audit
+  review_confidence_threshold: 0.85
+  write_cleaned_dataset: false
