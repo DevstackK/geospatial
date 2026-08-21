@@ -381,6 +381,10 @@
             be on the client VPN, private subnet, VM, Cloud Run, ECS, or another
             environment that can reach Gcomm Oracle and IQGEO Oracle.
           </p>
+          <p class="note">
+            Copy the commands and run dry-run first. The browser does not
+            connect to databases or store credentials.
+          </p>
           <div class="command-list">
             <code id="installCommand">pip install -e ".[oracle]"</code>
             <code id="envCommand">export GCOMM_ORACLE_DSN="host:1521/service" GCOMM_ORACLE_USER="user" GCOMM_ORACLE_PASSWORD="***"</code>
