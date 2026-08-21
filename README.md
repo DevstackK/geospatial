@@ -115,6 +115,12 @@ For large PostGIS-backed cleaning jobs:
 pip install -e ".[postgis]"
 ```
 
+For Oracle write-back:
+
+```bash
+pip install -e ".[oracle]"
+```
+
 For the official A2A server:
 
 ```bash
@@ -163,6 +169,12 @@ For a PostGIS SQL-plan dry-run:
 
 ```bash
 a2a-geo-clean config/postgis.example.yaml --run-mode dry_run
+```
+
+For an Oracle write-back dry-run:
+
+```bash
+a2a-geo-clean config/oracle-output.example.yaml --run-mode dry_run
 ```
 
 ## Frontend
@@ -328,6 +340,71 @@ For production, keep the same pattern:
 - validation agents check the result
 - humans review low-confidence or risky changes
 - every run produces an audit report
+
+## Oracle Write-Back Connector
+
+The project includes an Oracle output connector for returning approved cleaned
+data to an Oracle source system. It is intentionally conservative: the default
+pattern is to write to a staging table first, validate, then merge into the
+source table.
+
+Recommended flow:
+
+```text
+Oracle source
+  -> extract/profile
+  -> cleanse in PostGIS or file workflow
+  -> validate and audit
+  -> Oracle staging table
+  -> reviewed MERGE into Oracle target table
+```
+
+Example output config:
+
+```yaml
+output:
+  sink: oracle
+  mode: merge
+  stage_table: GIS.PARCELS_CLEANED_STAGE
+  target_table: GIS.PARCELS
+  source_table: PUBLIC.PARCELS_CLEANED_EXPORT
+  key_columns:
+    - PARCEL_ID
+  columns:
+    - PARCEL_ID
+    - OWNER_NAME
+    - LAND_USE
+    - GEOM
+  geometry:
+    column: GEOM
+    source_format: wkt
+    srid: 4326
+```
+
+In `dry_run` mode, the connector writes an Oracle SQL plan into `audit.json`.
+This includes staging-table creation, cleaned-row load SQL, and an Oracle
+`MERGE` statement.
+
+In `execute` mode, install the Oracle extra and provide credentials:
+
+```bash
+pip install -e ".[oracle]"
+export ORACLE_DSN="host:1521/service"
+export ORACLE_USER="gis_user"
+export ORACLE_PASSWORD="your_password"
+a2a-geo-clean config/oracle-output.example.yaml --run-mode execute
+```
+
+Geometry write-back depends on how Oracle stores spatial data. The connector can
+generate Oracle geometry expressions for:
+
+- `wkt` via `SDO_UTIL.FROM_WKTGEOMETRY(...)`
+- `wkb` via `SDO_UTIL.FROM_WKBGEOMETRY(...)`
+- existing `sdo_geometry`
+- longitude/latitude columns via `SDO_GEOMETRY(...)`
+
+Do not overwrite Oracle source tables blindly. Use staging tables, compare row
+counts and changed fields, and only run merge mode after validation.
 
 ## Scaling To 8M Records
 

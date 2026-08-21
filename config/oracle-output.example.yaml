@@ -1,0 +1,55 @@
+project:
+  name: parcels-postgis-to-oracle
+  run_mode: dry_run
+  output_dir: ./runs/parcels-oracle-writeback
+
+dataset:
+  source: postgis
+  table: public.parcels_cleaned
+  geometry_column: geom
+  id_column: parcel_id
+  target_crs: EPSG:4326
+  required_columns:
+    - parcel_id
+    - owner_name
+    - land_use
+
+rules:
+  string_trim_columns:
+    - owner_name
+    - land_use
+  category_maps:
+    land_use:
+      res: residential
+      residential use: residential
+      comm: commercial
+      commercial use: commercial
+  bounds:
+    minx: -180
+    miny: -90
+    maxx: 180
+    maxy: 90
+
+execution:
+  engine: postgis
+  audit_table: public.cleaning_audit
+  review_confidence_threshold: 0.85
+  write_cleaned_dataset: false
+
+output:
+  sink: oracle
+  mode: merge
+  stage_table: GIS.PARCELS_CLEANED_STAGE
+  target_table: GIS.PARCELS
+  source_table: PUBLIC.PARCELS_CLEANED_EXPORT
+  key_columns:
+    - PARCEL_ID
+  columns:
+    - PARCEL_ID
+    - OWNER_NAME
+    - LAND_USE
+    - GEOM
+  geometry:
+    column: GEOM
+    source_format: wkt
+    srid: 4326

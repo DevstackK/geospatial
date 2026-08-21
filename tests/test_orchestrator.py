@@ -126,3 +126,48 @@ def test_cli_does_not_require_upload_for_postgis_config(tmp_path: Path) -> None:
     assert updated["dataset"]["source"] == "postgis"
     assert "path" not in updated["dataset"]
     assert updated["project"]["output_dir"] == "runs/parcels-cleaning"
+
+
+def test_oracle_sink_dry_run_generates_merge_plan(tmp_path: Path) -> None:
+    config = {
+        "project": {
+            "name": "oracle-test",
+            "run_mode": "dry_run",
+            "output_dir": str(tmp_path),
+        },
+        "dataset": {
+            "source": "postgis",
+            "table": "public.parcels_cleaned",
+            "geometry_column": "geom",
+            "id_column": "parcel_id",
+            "target_crs": "EPSG:4326",
+            "required_columns": ["parcel_id"],
+        },
+        "rules": {"string_trim_columns": [], "category_maps": {}},
+        "execution": {
+            "engine": "postgis",
+            "audit_table": "public.cleaning_audit",
+        },
+        "output": {
+            "sink": "oracle",
+            "mode": "merge",
+            "stage_table": "GIS.PARCELS_CLEANED_STAGE",
+            "target_table": "GIS.PARCELS",
+            "source_table": "PUBLIC.PARCELS_CLEANED_EXPORT",
+            "key_columns": ["PARCEL_ID"],
+            "columns": ["PARCEL_ID", "OWNER_NAME", "LAND_USE", "GEOM"],
+            "geometry": {"column": "GEOM", "source_format": "wkt", "srid": 4326},
+        },
+    }
+
+    state = CleaningOrchestrator(config).run()
+
+    oracle_log = next(log for log in state.execution_log if log.get("sink") == "oracle")
+    sql = "\n".join(step["sql"] for step in oracle_log["sql_steps"])
+    assert oracle_log["status"] == "dry_run"
+    assert oracle_log["mode"] == "merge"
+    assert 'CREATE TABLE "GIS"."PARCELS_CLEANED_STAGE"' in sql
+    assert 'MERGE INTO "GIS"."PARCELS" target' in sql
+    assert 'USING "GIS"."PARCELS_CLEANED_STAGE" source' in sql
+    assert "SDO_UTIL.FROM_WKTGEOMETRY" in sql
+    assert (tmp_path / "audit.json").exists()

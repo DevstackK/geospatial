@@ -10,6 +10,7 @@ from a2a_geo_cleaning.agents.schema import SchemaAgent
 from a2a_geo_cleaning.agents.validation import ValidationAgent
 from a2a_geo_cleaning.contracts import WorkflowState
 from a2a_geo_cleaning.gis.executor import GeoExecutor
+from a2a_geo_cleaning.sinks.publisher import publish_outputs
 
 
 class CleaningOrchestrator:
@@ -30,6 +31,7 @@ class CleaningOrchestrator:
             self.state.add_result(agent.run(self.state))
 
         GeoExecutor(self.state).execute()
+        publish_outputs(self.state)
 
         report = ReportAgent().run(self.state)
         self.state.add_result(report)
