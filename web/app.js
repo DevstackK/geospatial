@@ -9,6 +9,7 @@ const state = {
 const els = {
   modeButtons: document.querySelectorAll(".mode-button"),
   pipelineView: document.querySelector("#pipelineView"),
+  howtoView: document.querySelector("#howtoView"),
   inspectView: document.querySelector("#inspectView"),
   fileInput: document.querySelector("#fileInput"),
   loadExample: document.querySelector("#loadExample"),
@@ -172,8 +173,10 @@ drawEmptyMap();
 
 function setView(view) {
   const showPipeline = view === "pipeline";
+  const showHowto = view === "howto";
   els.pipelineView.classList.toggle("hidden", !showPipeline);
-  els.inspectView.classList.toggle("hidden", showPipeline);
+  els.howtoView.classList.toggle("hidden", !showHowto);
+  els.inspectView.classList.toggle("hidden", showPipeline || showHowto);
   els.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });

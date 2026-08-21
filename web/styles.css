@@ -131,7 +131,20 @@ h3 {
   padding: 18px clamp(16px, 3vw, 34px) 34px;
 }
 
+.howto-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+  padding: 18px clamp(16px, 3vw, 34px) 34px;
+}
+
 .pipeline-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.howto-main {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -411,6 +424,90 @@ textarea {
   white-space: nowrap;
 }
 
+.command-list-large code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.check-grid article {
+  min-height: 150px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fcfdf9;
+}
+
+.check-grid strong,
+.step-list strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.check-grid p,
+.step-list,
+.note {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.check-grid p {
+  min-height: 66px;
+  margin: 8px 0 10px;
+}
+
+.check-grid code,
+.step-list code {
+  border-radius: 6px;
+  background: #f6faf4;
+  color: #1f3f35;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.check-grid code {
+  display: block;
+  padding: 8px;
+}
+
+.step-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.step-list li {
+  padding-left: 4px;
+}
+
+.role-list {
+  margin-top: 12px;
+}
+
+.flow-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.flow-list span {
+  display: block;
+  padding: 9px 10px;
+  border-left: 3px solid var(--green);
+  border-radius: 6px;
+  background: #f6faf4;
+  color: #1f3f35;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 #copyCommands {
   width: 100%;
   margin-top: 14px;
@@ -426,7 +523,8 @@ textarea {
 
 @media (max-width: 920px) {
   .layout,
-  .pipeline-layout {
+  .pipeline-layout,
+  .howto-layout {
     grid-template-columns: 1fr;
   }
 
@@ -459,6 +557,10 @@ textarea {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .check-grid {
     grid-template-columns: 1fr;
   }
 }

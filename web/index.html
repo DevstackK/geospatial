@@ -16,6 +16,9 @@
         <button class="mode-button active" data-view="pipeline" type="button">
           Pipeline
         </button>
+        <button class="mode-button" data-view="howto" type="button">
+          How to
+        </button>
         <button class="mode-button" data-view="inspect" type="button">
           GeoJSON inspect
         </button>
@@ -175,6 +178,164 @@
             <span>Optional planner</span>
             <strong>ANTHROPIC_API_KEY</strong>
           </div>
+        </section>
+      </aside>
+    </main>
+
+    <main id="howtoView" class="howto-layout hidden">
+      <section class="howto-main">
+        <div class="toolbar">
+          <div>
+            <h2>How to run this end to end</h2>
+            <p>
+              Use this app to prepare the config. Run the Python backend where
+              it can reach PostGIS and Oracle.
+            </p>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Prerequisites</h3>
+            <span>Before execution</span>
+          </div>
+          <div class="check-grid">
+            <article>
+              <strong>PostGIS database</strong>
+              <p>
+                Create or connect a PostgreSQL database with PostGIS enabled.
+                Supabase, Neon, Aurora Postgres, Cloud SQL, RDS, or a VM can work
+                if the PostGIS extension is available.
+              </p>
+              <code>CREATE EXTENSION IF NOT EXISTS postgis;</code>
+            </article>
+            <article>
+              <strong>Geospatial source table</strong>
+              <p>
+                Load the working dataset into PostGIS with a geometry column,
+                stable ID column, and the attributes you want to validate.
+              </p>
+              <code>public.parcels · geom · parcel_id</code>
+            </article>
+            <article>
+              <strong>Oracle access</strong>
+              <p>
+                Have a reachable Oracle database, a staging table name, target
+                table name, key columns, and a user allowed to create/load/merge.
+              </p>
+              <code>ORACLE_DSN · ORACLE_USER · ORACLE_PASSWORD</code>
+            </article>
+            <article>
+              <strong>Backend runner</strong>
+              <p>
+                Run the Python cleaner locally, on a VM, Cloud Run, ECS, Render,
+                or another worker. Do not run large GIS jobs in the browser.
+              </p>
+              <code>pip install -e ".[postgis,oracle]"</code>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Use the app</h3>
+            <span>Pipeline mode</span>
+          </div>
+          <ol class="step-list">
+            <li>
+              <strong>Enter PostGIS details.</strong>
+              Set the source table, geometry column, ID column, target CRS, and
+              required columns.
+            </li>
+            <li>
+              <strong>Set cleaning rules.</strong>
+              Add columns to trim, confirm category mappings, and keep the bounds
+              check for longitude/latitude output.
+            </li>
+            <li>
+              <strong>Enter Oracle write-back details.</strong>
+              Set the staging table, target table, export/source table, key
+              columns, and all columns that should be merged back.
+            </li>
+            <li>
+              <strong>Download the YAML.</strong>
+              Save it as <code>config/oracle-output.yaml</code> in the backend
+              project.
+            </li>
+            <li>
+              <strong>Run dry-run first.</strong>
+              Review the generated SQL plan and audit before allowing execution.
+            </li>
+            <li>
+              <strong>Execute only after review.</strong>
+              Run execute mode after validating row counts, changed fields, and
+              staging-table behavior.
+            </li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Commands</h3>
+            <span>Backend runner</span>
+          </div>
+          <div class="command-list command-list-large">
+            <code>pip install -e ".[postgis,oracle]"</code>
+            <code>export DATABASE_URL="postgresql://user:password@host:5432/geodata"</code>
+            <code>export ORACLE_DSN="host:1521/service"</code>
+            <code>export ORACLE_USER="gis_user"</code>
+            <code>export ORACLE_PASSWORD="your_password"</code>
+            <code>a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
+            <code>a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
+          </div>
+        </section>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>Deployment roles</h3>
+          <dl class="role-list">
+            <div>
+              <dt>Vercel frontend</dt>
+              <dd>Hosts this static app and helps generate config files.</dd>
+            </div>
+            <div>
+              <dt>PostGIS</dt>
+              <dd>Stores working geospatial data and runs spatial SQL.</dd>
+            </div>
+            <div>
+              <dt>Oracle</dt>
+              <dd>Receives reviewed cleaned rows through staging and merge.</dd>
+            </div>
+            <div>
+              <dt>Python backend</dt>
+              <dd>Runs the cleaner, audit, PostGIS plan, and Oracle sink.</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="panel">
+          <h3>Safe production flow</h3>
+          <div class="flow-list">
+            <span>Load sample</span>
+            <span>Generate config</span>
+            <span>Dry-run SQL plan</span>
+            <span>Review audit</span>
+            <span>Stage Oracle rows</span>
+            <span>Merge approved changes</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Important limits</h3>
+          <p class="note">
+            The browser app does not connect to databases or store credentials.
+            It generates config. The Python backend does the database work.
+          </p>
+          <p class="note">
+            For millions of records, keep execution close to the databases and
+            use PostGIS for spatial operations.
+          </p>
         </section>
       </aside>
     </main>
