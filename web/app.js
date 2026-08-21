@@ -9,6 +9,9 @@ const state = {
 const els = {
   modeButtons: document.querySelectorAll(".mode-button"),
   studioView: document.querySelector("#studioView"),
+  workflowDropzone: document.querySelector("#workflowDropzone"),
+  workflowSteps: document.querySelector("#workflowSteps"),
+  resetWorkflow: document.querySelector("#resetWorkflow"),
   pipelineView: document.querySelector("#pipelineView"),
   iqgeoView: document.querySelector("#iqgeoView"),
   dbtestsView: document.querySelector("#dbtestsView"),
@@ -255,6 +258,7 @@ els.copyClaudePrompt.addEventListener("click", async () => {
 renderPipeline();
 renderIqgeoRules();
 renderDbTests();
+setupStudioWorkflow();
 drawEmptyMap();
 
 function setView(view) {
@@ -356,6 +360,58 @@ function finishOnboarding() {
     node.classList.remove("spotlight-target");
   });
   els.onboardingOverlay.classList.add("hidden");
+}
+
+function setupStudioWorkflow() {
+  document.querySelectorAll("[data-flow-step]").forEach((card) => {
+    card.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", card.dataset.flowStep);
+      event.dataTransfer.effectAllowed = "copy";
+    });
+  });
+
+  els.workflowDropzone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    els.workflowDropzone.classList.add("drag-over");
+  });
+  els.workflowDropzone.addEventListener("dragleave", () => {
+    els.workflowDropzone.classList.remove("drag-over");
+  });
+  els.workflowDropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    els.workflowDropzone.classList.remove("drag-over");
+    const step = event.dataTransfer.getData("text/plain");
+    if (step) addWorkflowStep(step);
+  });
+  els.resetWorkflow.addEventListener("click", resetWorkflowSteps);
+  ["Connect", "Profile", "Map", "Validate", "Split", "Import"].forEach(addWorkflowStep);
+}
+
+function addWorkflowStep(step) {
+  const count = els.workflowSteps.children.length + 1;
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "workflow-step";
+  item.title = "Click to remove this workflow step.";
+  item.textContent = `${String(count).padStart(2, "0")} ${step}`;
+  item.addEventListener("click", () => {
+    item.remove();
+    renumberWorkflowSteps();
+  });
+  els.workflowSteps.append(item);
+  renumberWorkflowSteps();
+}
+
+function resetWorkflowSteps() {
+  els.workflowSteps.textContent = "";
+  ["Connect", "Profile", "Map", "Validate", "Split", "Import"].forEach(addWorkflowStep);
+}
+
+function renumberWorkflowSteps() {
+  [...els.workflowSteps.children].forEach((item, index) => {
+    const label = item.textContent.replace(/^\d+\s+/, "");
+    item.textContent = `${String(index + 1).padStart(2, "0")} ${label}`;
+  });
 }
 
 function renderPipeline() {

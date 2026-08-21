@@ -1,0 +1,55 @@
+project:
+  name: gcomm-to-iqgeo-cleansing
+  run_mode: dry_run
+  output_dir: ./runs/gcomm-iqgeo-cleansing
+
+dataset:
+  source: oracle
+  table: GCOMM.ASSETS
+  geometry_column: GEOM
+  id_column: ASSET_ID
+  target_crs: EPSG:4326
+  required_columns:
+    - ASSET_ID
+    - ASSET_TYPE
+    - STATUS
+    - GEOM
+
+rules:
+  string_trim_columns:
+    - ASSET_TYPE
+    - STATUS
+  category_maps:
+    STATUS:
+      active: ACTIVE
+      in service: IN_SERVICE
+      retired: RETIRED
+  bounds:
+    minx: -180
+    miny: -90
+    maxx: 180
+    maxy: 90
+
+execution:
+  engine: oracle_spatial
+  audit_table: IQGEO_STAGE.CLEANSING_AUDIT
+  review_confidence_threshold: 0.85
+  write_cleaned_dataset: false
+
+output:
+  sink: oracle
+  mode: merge
+  stage_table: IQGEO_STAGE.GCOMM_ASSETS_STAGE
+  target_table: IQGEO.ASSETS
+  source_table: IQGEO_STAGE.GCOMM_ASSETS_CLEAN
+  key_columns:
+    - ASSET_ID
+  columns:
+    - ASSET_ID
+    - ASSET_TYPE
+    - STATUS
+    - GEOM
+  geometry:
+    column: GEOM
+    source_format: sdo_geometry
+    srid: 4326

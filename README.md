@@ -233,6 +233,10 @@ Studio mode is the FME-style sequence for the project:
 Connect -> Profile -> Map -> Validate -> Split -> Import
 ```
 
+The Studio blocks can be dragged into the workflow lane to sketch the run order.
+This is the first visual workflow surface; the backend worker still executes the
+actual job from the generated YAML.
+
 For 8 million records, the important design decision is to keep validation
 database-side. The app should generate the rules and SQL plan; Oracle Spatial
 and the backend runner should do the heavy work.
@@ -357,6 +361,72 @@ a2a-geo-agent --host 0.0.0.0 --port 8787
 
 The frontend currently generates configs and local downloads. It does not send
 credentials or run database jobs from the browser.
+
+## Production Worker API
+
+The production path is the `geoflow-worker` service. Run it on a machine that
+can reach Gcomm Oracle and IQGEO Oracle.
+
+Install:
+
+```bash
+pip install -e ".[worker,oracle]"
+```
+
+Start:
+
+```bash
+geoflow-worker --host 0.0.0.0 --port 8788 --config config/gcomm-iqgeo.oracle.yaml
+```
+
+Health check:
+
+```bash
+curl http://localhost:8788/health
+```
+
+Create a dry-run job:
+
+```bash
+curl -X POST http://localhost:8788/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"config_path":"config/gcomm-iqgeo.oracle.yaml","run_mode":"dry_run"}'
+```
+
+Check status:
+
+```bash
+curl http://localhost:8788/api/jobs/<job_id>
+curl http://localhost:8788/api/jobs/<job_id>/events
+```
+
+Generate a live Oracle profile or a dry-run profile plan:
+
+```bash
+curl -X POST http://localhost:8788/api/oracle/profile \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dry_run": true,
+    "table": "GCOMM.ASSETS",
+    "geometry_column": "GEOM",
+    "id_column": "ASSET_ID",
+    "status_column": "STATUS",
+    "srid": 4326
+  }'
+```
+
+For live profiling, omit `dry_run` and set the Oracle environment variables on
+the worker:
+
+```bash
+export GCOMM_ORACLE_DSN="gcomm-host:1521/service"
+export GCOMM_ORACLE_USER="gcomm_user"
+export GCOMM_ORACLE_PASSWORD="your_password"
+```
+
+The first worker version uses an in-memory job store. That is good for pilot
+testing. For production HA, replace it with Postgres/Redis-backed persistence
+and a queue before multiple workers process the same job stream.
 
 ## Optional Claude Planner
 

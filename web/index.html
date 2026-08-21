@@ -60,37 +60,51 @@
         </div>
 
         <div class="studio-flow" aria-label="GeoFlow IQ workflow">
-          <article>
+          <article draggable="true" data-flow-step="Connect">
             <span>01</span>
             <strong>Connect</strong>
             <p>Reach Gcomm Oracle and IQGEO Oracle from a backend runner on VPN or private network.</p>
           </article>
-          <article>
+          <article draggable="true" data-flow-step="Profile">
             <span>02</span>
             <strong>Profile</strong>
             <p>Count 8M+ records in-database: null IDs, duplicate IDs, status spread, SRIDs, and geometry quality.</p>
           </article>
-          <article>
+          <article draggable="true" data-flow-step="Map">
             <span>03</span>
             <strong>Map</strong>
             <p>Align Gcomm fields to IQGEO required fields, asset types, statuses, and parent-reference rules.</p>
           </article>
-          <article>
+          <article draggable="true" data-flow-step="Validate">
             <span>04</span>
             <strong>Validate</strong>
             <p>Run Oracle Spatial checks close to the data instead of dragging millions of rows through the browser.</p>
           </article>
-          <article>
+          <article draggable="true" data-flow-step="Split">
             <span>05</span>
             <strong>Split</strong>
             <p>Classify rows as approved, fixed, rejected, quarantined, redundant, or needs review.</p>
           </article>
-          <article>
+          <article draggable="true" data-flow-step="Import">
             <span>06</span>
             <strong>Import</strong>
             <p>Stage and merge approved rows into IQGEO Oracle with an audit trail for every blocked or changed row.</p>
           </article>
         </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              Drag-and-drop workflow
+              <button class="info-button" type="button" title="Drag blocks above into this lane to sketch the execution order. This is the first step toward a visual workflow canvas.">i</button>
+            </h3>
+            <button id="resetWorkflow" type="button">Reset</button>
+          </div>
+          <div id="workflowDropzone" class="workflow-dropzone" aria-label="Workflow dropzone">
+            <p>Drag workflow blocks here to build the run sequence.</p>
+            <div id="workflowSteps" class="workflow-steps"></div>
+          </div>
+        </section>
 
         <section class="panel">
           <div class="panel-heading">
@@ -966,6 +980,40 @@
             <code>a2a-geo-clean config/iqgeo-rules.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              Worker API mode
+              <button class="info-button" type="button" title="Use this when the frontend should submit jobs to a secured backend runner instead of an operator copying commands manually.">i</button>
+            </h3>
+            <span>Job engine</span>
+          </div>
+          <ol class="step-list">
+            <li>
+              <strong>Run the worker near Oracle.</strong>
+              Start it on a VM, container, or internal server that can reach
+              Gcomm and IQGEO over private networking or VPN.
+            </li>
+            <li>
+              <strong>Submit jobs to the worker.</strong>
+              The worker accepts dry-run and execute jobs, stores job status,
+              and exposes event/status endpoints for the UI.
+            </li>
+            <li>
+              <strong>Use live profiling before import.</strong>
+              Profile row counts, duplicate IDs, null geometry, status spread,
+              SRID mismatch, and invalid Oracle Spatial geometry before merge.
+            </li>
+          </ol>
+          <div class="command-list command-list-large">
+            <code>pip install -e ".[worker,oracle]"</code>
+            <code>geoflow-worker --host 0.0.0.0 --port 8788 --config config/gcomm-iqgeo.oracle.yaml</code>
+            <code>curl http://localhost:8788/health</code>
+            <code>curl -X POST http://localhost:8788/api/jobs -H "Content-Type: application/json" -d '{"config_path":"config/gcomm-iqgeo.oracle.yaml","run_mode":"dry_run"}'</code>
+            <code>curl http://localhost:8788/api/jobs/&lt;job_id&gt;/events</code>
           </div>
         </section>
       </section>

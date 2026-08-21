@@ -260,6 +260,11 @@ dd {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: var(--shadow);
+  cursor: grab;
+}
+
+.studio-flow article:active {
+  cursor: grabbing;
 }
 
 .studio-flow span {
@@ -286,6 +291,37 @@ dd {
   margin-bottom: 0;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.workflow-dropzone {
+  min-height: 126px;
+  border: 1px dashed #9fb0a5;
+  border-radius: 8px;
+  background: #f8fbf6;
+  padding: 14px;
+}
+
+.workflow-dropzone.drag-over {
+  border-color: #204f41;
+  background: #eef6ee;
+}
+
+.workflow-dropzone p {
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+
+.workflow-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workflow-step {
+  min-height: 36px;
+  border-color: #204f41;
+  background: #204f41;
+  color: #fff;
 }
 
 .metric,
