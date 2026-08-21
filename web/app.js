@@ -59,6 +59,7 @@ const els = {
   copyYaml: document.querySelector("#copyYaml"),
   copyCommands: document.querySelector("#copyCommands"),
   installCommand: document.querySelector("#installCommand"),
+  envCommand: document.querySelector("#envCommand"),
   dryRunCommand: document.querySelector("#dryRunCommand"),
   executeCommand: document.querySelector("#executeCommand"),
   gateList: document.querySelector("#gateList"),
@@ -182,6 +183,7 @@ els.copyCommands.addEventListener("click", async () => {
   await copyText(
     [
       els.installCommand.textContent,
+      els.envCommand.textContent,
       els.dryRunCommand.textContent,
       els.executeCommand.textContent,
     ].join("\n"),
@@ -352,10 +354,6 @@ function renderPipeline() {
   els.configStatus.textContent = config.requiredColumns.length
     ? `${config.requiredColumns.length} required columns`
     : "No required columns";
-  els.dryRunCommand.textContent =
-    "a2a-geo-clean config/oracle-output.yaml --run-mode dry_run";
-  els.executeCommand.textContent =
-    "a2a-geo-clean config/oracle-output.yaml --run-mode execute";
   renderGates(config);
 }
 

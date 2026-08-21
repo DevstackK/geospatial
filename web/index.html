@@ -163,12 +163,18 @@
       <aside class="side">
         <section class="panel">
           <h3>
-            Run commands
-            <button class="info-button" type="button" title="Run dry-run first. Execute mode should only run after the audit and SQL plan are reviewed.">i</button>
+            Backend run commands
+            <button class="info-button" type="button" title="Run these on a secure backend runner with Oracle network access. Set environment variables first, dry-run, review the audit, then execute.">i</button>
           </h3>
+          <p class="note">
+            Run these on the backend runner, not in the browser. The runner must
+            be on the client VPN, private subnet, VM, Cloud Run, ECS, or another
+            environment that can reach Gcomm Oracle and IQGEO Oracle.
+          </p>
           <div class="command-list">
-            <code id="installCommand">pip install -e ".[postgis,oracle]"</code>
-            <code id="dryRunCommand">a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
+            <code id="installCommand">pip install -e ".[oracle]"</code>
+            <code id="envCommand">export GCOMM_ORACLE_DSN="host:1521/service" GCOMM_ORACLE_USER="user" GCOMM_ORACLE_PASSWORD="***"</code>
+            <code id="dryRunCommand">a2a-geo-clean config/iqgeo-rules.yaml --run-mode dry_run</code>
             <code id="executeCommand">a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
           </div>
           <button id="copyCommands" type="button">Copy commands</button>
@@ -722,15 +728,49 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h3>Commands</h3>
+            <h3>Backend run instructions</h3>
             <span>Backend runner</span>
           </div>
+          <ol class="step-list">
+            <li>
+              <strong>Open a secure backend shell.</strong>
+              Use a machine that can reach both Oracle databases. This can be a
+              local machine on VPN for testing, then a VM or worker near Oracle
+              for production.
+            </li>
+            <li>
+              <strong>Install the backend package.</strong>
+              Install Oracle support in the project environment.
+            </li>
+            <li>
+              <strong>Set environment variables.</strong>
+              Put Gcomm and IQGEO DSNs, users, and passwords in the shell or
+              secret manager. Do not paste them into the browser.
+            </li>
+            <li>
+              <strong>Run IQGEO rule dry-run.</strong>
+              Validate schema, geometry, status values, redundant records, and
+              parent/reference rules without importing data.
+            </li>
+            <li>
+              <strong>Review the audit.</strong>
+              Check approved, fixed, rejected, quarantined, redundant, and
+              needs-review counts with the data owner.
+            </li>
+            <li>
+              <strong>Execute the import path.</strong>
+              Only after sign-off, run execute mode to stage and merge approved
+              rows into IQGEO Oracle.
+            </li>
+          </ol>
           <div class="command-list command-list-large">
-            <code>pip install -e ".[postgis,oracle]"</code>
-            <code>export DATABASE_URL="postgresql://user:password@host:5432/geodata"</code>
-            <code>export ORACLE_DSN="host:1521/service"</code>
-            <code>export ORACLE_USER="gis_user"</code>
-            <code>export ORACLE_PASSWORD="your_password"</code>
+            <code>pip install -e ".[oracle]"</code>
+            <code>export GCOMM_ORACLE_DSN="gcomm-host:1521/service"</code>
+            <code>export GCOMM_ORACLE_USER="gcomm_user"</code>
+            <code>export GCOMM_ORACLE_PASSWORD="your_password"</code>
+            <code>export IQGEO_ORACLE_DSN="iqgeo-host:1521/service"</code>
+            <code>export IQGEO_ORACLE_USER="iqgeo_user"</code>
+            <code>export IQGEO_ORACLE_PASSWORD="your_password"</code>
             <code>a2a-geo-clean config/iqgeo-rules.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
