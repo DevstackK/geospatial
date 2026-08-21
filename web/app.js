@@ -9,6 +9,7 @@ const state = {
 const els = {
   modeButtons: document.querySelectorAll(".mode-button"),
   pipelineView: document.querySelector("#pipelineView"),
+  iqgeoView: document.querySelector("#iqgeoView"),
   howtoView: document.querySelector("#howtoView"),
   inspectView: document.querySelector("#inspectView"),
   fileInput: document.querySelector("#fileInput"),
@@ -60,6 +61,25 @@ const els = {
   dryRunCommand: document.querySelector("#dryRunCommand"),
   executeCommand: document.querySelector("#executeCommand"),
   gateList: document.querySelector("#gateList"),
+  gcommSourceTable: document.querySelector("#gcommSourceTable"),
+  iqgeoTargetTable: document.querySelector("#iqgeoTargetTable"),
+  iqgeoStageTable: document.querySelector("#iqgeoStageTable"),
+  iqgeoCleanTable: document.querySelector("#iqgeoCleanTable"),
+  iqgeoRejectTable: document.querySelector("#iqgeoRejectTable"),
+  iqgeoRedundantTable: document.querySelector("#iqgeoRedundantTable"),
+  iqgeoRequiredFields: document.querySelector("#iqgeoRequiredFields"),
+  iqgeoKeyFields: document.querySelector("#iqgeoKeyFields"),
+  iqgeoAssetTypes: document.querySelector("#iqgeoAssetTypes"),
+  iqgeoStatuses: document.querySelector("#iqgeoStatuses"),
+  iqgeoRedundantStatuses: document.querySelector("#iqgeoRedundantStatuses"),
+  iqgeoGeometryTypes: document.querySelector("#iqgeoGeometryTypes"),
+  iqgeoSrid: document.querySelector("#iqgeoSrid"),
+  iqgeoFailureAction: document.querySelector("#iqgeoFailureAction"),
+  iqgeoParentRules: document.querySelector("#iqgeoParentRules"),
+  iqgeoRulesOutput: document.querySelector("#iqgeoRulesOutput"),
+  downloadIqgeoRules: document.querySelector("#downloadIqgeoRules"),
+  copyIqgeoRules: document.querySelector("#copyIqgeoRules"),
+  iqgeoRuleCards: document.querySelector("#iqgeoRuleCards"),
 };
 
 const exampleData = {
@@ -117,6 +137,11 @@ document.querySelectorAll("#pipelineView input, #pipelineView select").forEach((
   input.addEventListener("change", renderPipeline);
 });
 
+document.querySelectorAll("#iqgeoView input, #iqgeoView select").forEach((input) => {
+  input.addEventListener("input", renderIqgeoRules);
+  input.addEventListener("change", renderIqgeoRules);
+});
+
 els.downloadYaml.addEventListener("click", () =>
   downloadText("oracle-output.yaml", state.pipelineYaml, "application/x-yaml"),
 );
@@ -133,6 +158,13 @@ els.copyCommands.addEventListener("click", async () => {
     ].join("\n"),
   );
   flashButton(els.copyCommands, "Copied");
+});
+els.downloadIqgeoRules.addEventListener("click", () =>
+  downloadText("iqgeo-rules.yaml", els.iqgeoRulesOutput.value, "application/x-yaml"),
+);
+els.copyIqgeoRules.addEventListener("click", async () => {
+  await copyText(els.iqgeoRulesOutput.value);
+  flashButton(els.copyIqgeoRules, "Copied");
 });
 
 els.fileInput.addEventListener("change", async (event) => {
@@ -169,14 +201,17 @@ els.copyClaudePrompt.addEventListener("click", async () => {
 });
 
 renderPipeline();
+renderIqgeoRules();
 drawEmptyMap();
 
 function setView(view) {
   const showPipeline = view === "pipeline";
+  const showIqgeo = view === "iqgeo";
   const showHowto = view === "howto";
   els.pipelineView.classList.toggle("hidden", !showPipeline);
+  els.iqgeoView.classList.toggle("hidden", !showIqgeo);
   els.howtoView.classList.toggle("hidden", !showHowto);
-  els.inspectView.classList.toggle("hidden", showPipeline || showHowto);
+  els.inspectView.classList.toggle("hidden", showPipeline || showIqgeo || showHowto);
   els.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
@@ -284,6 +319,102 @@ function renderGates(config) {
     item.querySelector("strong").textContent = title;
     item.querySelector("span").textContent = text;
     els.gateList.append(item);
+  }
+}
+
+function renderIqgeoRules() {
+  const config = readIqgeoConfig();
+  els.iqgeoRulesOutput.value = buildIqgeoRulesYaml(config);
+  renderIqgeoRuleCards(config);
+}
+
+function readIqgeoConfig() {
+  return {
+    gcommSourceTable: valueOf(els.gcommSourceTable),
+    iqgeoTargetTable: valueOf(els.iqgeoTargetTable),
+    stageTable: valueOf(els.iqgeoStageTable),
+    cleanTable: valueOf(els.iqgeoCleanTable),
+    rejectTable: valueOf(els.iqgeoRejectTable),
+    redundantTable: valueOf(els.iqgeoRedundantTable),
+    requiredFields: csvValues(els.iqgeoRequiredFields),
+    keyFields: csvValues(els.iqgeoKeyFields),
+    assetTypes: csvValues(els.iqgeoAssetTypes),
+    statuses: csvValues(els.iqgeoStatuses),
+    redundantStatuses: csvValues(els.iqgeoRedundantStatuses),
+    geometryTypes: csvValues(els.iqgeoGeometryTypes),
+    srid: Number(valueOf(els.iqgeoSrid) || 4326),
+    failureAction: valueOf(els.iqgeoFailureAction),
+    parentRules: relationshipValues(els.iqgeoParentRules),
+  };
+}
+
+function buildIqgeoRulesYaml(config) {
+  return [
+    "project:",
+    "  name: gcomm-to-iqgeo-validation",
+    "  run_mode: dry_run",
+    "",
+    "dataset:",
+    "  source: oracle",
+    `  table: ${yamlScalar(config.gcommSourceTable)}`,
+    "  target_system: iqgeo",
+    "",
+    "oracle_pipeline:",
+    `  source_table: ${yamlScalar(config.gcommSourceTable)}`,
+    `  stage_table: ${yamlScalar(config.stageTable)}`,
+    `  clean_table: ${yamlScalar(config.cleanTable)}`,
+    `  reject_table: ${yamlScalar(config.rejectTable)}`,
+    `  redundant_table: ${yamlScalar(config.redundantTable)}`,
+    `  target_table: ${yamlScalar(config.iqgeoTargetTable)}`,
+    "",
+    "validation:",
+    `  default_failure_action: ${yamlScalar(config.failureAction)}`,
+    ...yamlListBlock("  required_fields:", config.requiredFields),
+    ...yamlListBlock("  key_fields:", config.keyFields),
+    ...yamlListBlock("  allowed_asset_types:", config.assetTypes),
+    ...yamlListBlock("  allowed_statuses:", config.statuses),
+    ...yamlListBlock("  redundant_statuses:", config.redundantStatuses),
+    "  geometry:",
+    `    srid: ${config.srid}`,
+    ...yamlListBlock("    allowed_types:", config.geometryTypes),
+    "    reject_null_geometry: true",
+    "    reject_invalid_geometry: true",
+    "    reject_zero_length_lines: true",
+    "  relationships:",
+    ...relationshipYaml(config.parentRules),
+    "",
+    "classification:",
+    "  approved: import_to_iqgeo",
+    "  fixed: import_with_audit",
+    "  rejected: block_import",
+    "  quarantined: hold_for_repair",
+    "  redundant: archive_only",
+    "  needs_review: human_decision",
+    "",
+    "audit:",
+    "  write_validation_errors: true",
+    "  write_import_audit: true",
+    "  include_redundant_records: true",
+    "",
+  ].join("\n");
+}
+
+function renderIqgeoRuleCards(config) {
+  const cards = [
+    ["Schema", `${config.requiredFields.length} required fields and ${config.keyFields.length} key fields.`],
+    ["Geometry", `${config.geometryTypes.join(", ") || "No"} geometries allowed at SRID ${config.srid}.`],
+    ["Domain values", `${config.assetTypes.length} asset types and ${config.statuses.length} statuses allowed.`],
+    ["Redundant data", `${config.redundantStatuses.join(", ") || "No"} statuses are separated from import.`],
+    ["Relationships", `${config.parentRules.length} parent/reference checks configured.`],
+  ];
+  els.iqgeoRuleCards.textContent = "";
+  for (const [title, text] of cards) {
+    const item = document.createElement("div");
+    item.className = "rule";
+    item.innerHTML = "<strong></strong><span></span>";
+    item.querySelector("strong").textContent = title;
+    item.querySelector("span").textContent = text;
+    els.iqgeoRuleCards.append(item);
   }
 }
 
@@ -883,7 +1014,8 @@ function yamlScalar(value) {
 
 function yamlListBlock(key, values) {
   if (!values.length) return [`${key} []`];
-  return [key, ...values.map((value) => `    - ${yamlScalar(value)}`)];
+  const indent = " ".repeat((key.match(/^ */)?.[0].length || 0) + 2);
+  return [key, ...values.map((value) => `${indent}- ${yamlScalar(value)}`)];
 }
 
 function oracleGeometryColumn(config) {
@@ -892,6 +1024,27 @@ function oracleGeometryColumn(config) {
     config.oracleColumns.at(-1) ||
     "GEOM"
   );
+}
+
+function relationshipValues(element) {
+  return valueOf(element)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      const [child, parent] = value.split("->").map((part) => part.trim());
+      return { child, parent: parent || "" };
+    });
+}
+
+function relationshipYaml(rules) {
+  if (!rules.length) return ["    []"];
+  return rules.flatMap((rule) => [
+    "    - type: parent_reference",
+    `      child: ${yamlScalar(rule.child)}`,
+    `      parent: ${yamlScalar(rule.parent)}`,
+    "      on_missing: quarantine",
+  ]);
 }
 
 function flashButton(button, text) {

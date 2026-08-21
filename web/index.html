@@ -16,6 +16,9 @@
         <button class="mode-button active" data-view="pipeline" type="button">
           Pipeline
         </button>
+        <button class="mode-button" data-view="iqgeo" type="button">
+          IQGEO rules
+        </button>
         <button class="mode-button" data-view="howto" type="button">
           How to
         </button>
@@ -182,14 +185,173 @@
       </aside>
     </main>
 
+    <main id="iqgeoView" class="pipeline-layout hidden">
+      <section class="pipeline-main">
+        <div class="toolbar">
+          <div>
+            <h2>Gcomm to IQGEO validation rules</h2>
+            <p>
+              Define the strict checks that decide which Oracle records are
+              approved, fixed, rejected, quarantined, or marked redundant before
+              IQGEO import.
+            </p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="downloadIqgeoRules" type="button">Rules YAML</button>
+            <button id="copyIqgeoRules" type="button">Copy rules</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="IQGEO validation summary">
+          <div class="metric">
+            <span>Source</span>
+            <strong>Gcomm</strong>
+          </div>
+          <div class="metric">
+            <span>Target</span>
+            <strong>IQGEO</strong>
+          </div>
+          <div class="metric">
+            <span>Engine</span>
+            <strong>Oracle</strong>
+          </div>
+          <div class="metric">
+            <span>Action</span>
+            <strong>quarantine</strong>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Oracle tables</h3>
+            <span>Source, stage, clean, reject</span>
+          </div>
+          <div class="form-grid">
+            <label>
+              Gcomm source table
+              <input id="gcommSourceTable" type="text" value="GCOMM.ASSETS" />
+            </label>
+            <label>
+              IQGEO target table
+              <input id="iqgeoTargetTable" type="text" value="IQGEO.ASSETS" />
+            </label>
+            <label>
+              Staging table
+              <input id="iqgeoStageTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_STAGE" />
+            </label>
+            <label>
+              Clean table
+              <input id="iqgeoCleanTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_CLEAN" />
+            </label>
+            <label>
+              Reject table
+              <input id="iqgeoRejectTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_REJECT" />
+            </label>
+            <label>
+              Redundant table
+              <input id="iqgeoRedundantTable" type="text" value="IQGEO_STAGE.GCOMM_ASSETS_REDUNDANT" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Strict validation rules</h3>
+            <span>IQGEO import gate</span>
+          </div>
+          <div class="form-grid">
+            <label>
+              Required fields
+              <input id="iqgeoRequiredFields" type="text" value="ASSET_ID, ASSET_TYPE, STATUS, GEOM" />
+            </label>
+            <label>
+              Key fields
+              <input id="iqgeoKeyFields" type="text" value="ASSET_ID" />
+            </label>
+            <label>
+              Allowed asset types
+              <input id="iqgeoAssetTypes" type="text" value="DUCT, CABLE, CHAMBER, POLE, CABINET, SPLICE" />
+            </label>
+            <label>
+              Allowed statuses
+              <input id="iqgeoStatuses" type="text" value="ACTIVE, PLANNED, BUILT, IN_SERVICE" />
+            </label>
+            <label>
+              Redundant statuses
+              <input id="iqgeoRedundantStatuses" type="text" value="RETIRED, ABANDONED, DUPLICATE, DECOMMISSIONED" />
+            </label>
+            <label>
+              Allowed geometry types
+              <input id="iqgeoGeometryTypes" type="text" value="POINT, LINE, POLYGON" />
+            </label>
+            <label>
+              SRID
+              <input id="iqgeoSrid" type="number" value="4326" />
+            </label>
+            <label>
+              Default failure action
+              <select id="iqgeoFailureAction">
+                <option value="quarantine">quarantine</option>
+                <option value="reject">reject</option>
+                <option value="needs_review">needs_review</option>
+              </select>
+            </label>
+            <label class="wide">
+              Parent reference rules
+              <input id="iqgeoParentRules" type="text" value="CABLE.PARENT_STRUCTURE_ID -> STRUCTURE.STRUCTURE_ID, SPLICE.CABLE_ID -> CABLE.CABLE_ID" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>Generated IQGEO rules YAML</h3>
+            <span>Save as config/iqgeo-rules.yaml</span>
+          </div>
+          <textarea id="iqgeoRulesOutput" spellcheck="false"></textarea>
+        </section>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>Record statuses</h3>
+          <div class="flow-list">
+            <span>APPROVED -> import to IQGEO</span>
+            <span>FIXED -> import with audit</span>
+            <span>REJECTED -> block import</span>
+            <span>QUARANTINED -> hold for repair</span>
+            <span>REDUNDANT -> archive/report only</span>
+            <span>NEEDS_REVIEW -> human decision</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Rule categories</h3>
+          <div id="iqgeoRuleCards" class="rule-list"></div>
+        </section>
+
+        <section class="panel">
+          <h3>Oracle flow</h3>
+          <div class="flow-list">
+            <span>Extract Gcomm rows</span>
+            <span>Load staging table</span>
+            <span>Run strict validation</span>
+            <span>Split clean/reject/redundant</span>
+            <span>Review audit</span>
+            <span>Merge clean rows into IQGEO</span>
+          </div>
+        </section>
+      </aside>
+    </main>
+
     <main id="howtoView" class="howto-layout hidden">
       <section class="howto-main">
         <div class="toolbar">
           <div>
             <h2>How to run this end to end</h2>
             <p>
-              Use this app to prepare the config. Run the Python backend where
-              it can reach PostGIS and Oracle.
+              Use this app to prepare the configs. Run the Python backend where
+              it can reach Gcomm Oracle and IQGEO Oracle.
             </p>
           </div>
         </div>
@@ -201,27 +363,26 @@
           </div>
           <div class="check-grid">
             <article>
-              <strong>PostGIS database</strong>
+              <strong>Gcomm Oracle source</strong>
               <p>
-                Create or connect a PostgreSQL database with PostGIS enabled.
-                Supabase, Neon, Aurora Postgres, Cloud SQL, RDS, or a VM can work
-                if the PostGIS extension is available.
+                Confirm the source schemas, tables, asset IDs, geometry columns,
+                status fields, and relationship fields coming from Gcomm.
               </p>
-              <code>CREATE EXTENSION IF NOT EXISTS postgis;</code>
+              <code>GCOMM.ASSETS · ASSET_ID · GEOM</code>
             </article>
             <article>
-              <strong>Geospatial source table</strong>
+              <strong>IQGEO target model</strong>
               <p>
-                Load the working dataset into PostGIS with a geometry column,
-                stable ID column, and the attributes you want to validate.
+                Capture the strict IQGEO table names, allowed asset types,
+                mandatory fields, parent-child rules, and accepted statuses.
               </p>
-              <code>public.parcels · geom · parcel_id</code>
+              <code>IQGEO.ASSETS · required fields · relationships</code>
             </article>
             <article>
               <strong>Oracle access</strong>
               <p>
-                Have a reachable Oracle database, a staging table name, target
-                table name, key columns, and a user allowed to create/load/merge.
+                Have reachable Oracle credentials for extraction, staging,
+                validation tables, clean tables, and IQGEO merge/import tables.
               </p>
               <code>ORACLE_DSN · ORACLE_USER · ORACLE_PASSWORD</code>
             </article>
@@ -239,26 +400,28 @@
         <section class="panel">
           <div class="panel-heading">
             <h3>Use the app</h3>
-            <span>Pipeline mode</span>
+            <span>Pipeline and IQGEO rules</span>
           </div>
           <ol class="step-list">
             <li>
-              <strong>Enter PostGIS details.</strong>
-              Set the source table, geometry column, ID column, target CRS, and
-              required columns.
+              <strong>Open IQGEO rules.</strong>
+              Define Gcomm source tables, IQGEO target tables, staging tables,
+              clean/reject/redundant tables, required fields, asset types,
+              statuses, geometry rules, and parent reference rules.
             </li>
             <li>
-              <strong>Set cleaning rules.</strong>
-              Add columns to trim, confirm category mappings, and keep the bounds
-              check for longitude/latitude output.
+              <strong>Download the rules YAML.</strong>
+              Save it as <code>config/iqgeo-rules.yaml</code>. This is the
+              strict import gate for deciding approved, rejected, quarantined,
+              redundant, and review records.
             </li>
             <li>
-              <strong>Enter Oracle write-back details.</strong>
-              Set the staging table, target table, export/source table, key
-              columns, and all columns that should be merged back.
+              <strong>Use Pipeline for execution config.</strong>
+              Set the staging/export/target tables and commands that the backend
+              runner will use for dry-run and execute mode.
             </li>
             <li>
-              <strong>Download the YAML.</strong>
+              <strong>Download the pipeline YAML.</strong>
               Save it as <code>config/oracle-output.yaml</code> in the backend
               project.
             </li>
@@ -285,6 +448,7 @@
             <code>export ORACLE_DSN="host:1521/service"</code>
             <code>export ORACLE_USER="gis_user"</code>
             <code>export ORACLE_PASSWORD="your_password"</code>
+            <code>a2a-geo-clean config/iqgeo-rules.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode dry_run</code>
             <code>a2a-geo-clean config/oracle-output.yaml --run-mode execute</code>
           </div>
@@ -300,16 +464,16 @@
               <dd>Hosts this static app and helps generate config files.</dd>
             </div>
             <div>
-              <dt>PostGIS</dt>
-              <dd>Stores working geospatial data and runs spatial SQL.</dd>
+              <dt>Gcomm Oracle</dt>
+              <dd>Source system containing the raw geospatial network data.</dd>
             </div>
             <div>
-              <dt>Oracle</dt>
-              <dd>Receives reviewed cleaned rows through staging and merge.</dd>
+              <dt>IQGEO Oracle</dt>
+              <dd>Strict target system that receives only approved clean rows.</dd>
             </div>
             <div>
               <dt>Python backend</dt>
-              <dd>Runs the cleaner, audit, PostGIS plan, and Oracle sink.</dd>
+              <dd>Runs validation, audit, reject/redundant splits, and Oracle import.</dd>
             </div>
           </dl>
         </section>
@@ -318,11 +482,12 @@
           <h3>Safe production flow</h3>
           <div class="flow-list">
             <span>Load sample</span>
-            <span>Generate config</span>
-            <span>Dry-run SQL plan</span>
+            <span>Define IQGEO rules</span>
+            <span>Stage Gcomm rows</span>
+            <span>Dry-run validation</span>
             <span>Review audit</span>
-            <span>Stage Oracle rows</span>
-            <span>Merge approved changes</span>
+            <span>Quarantine bad/redundant data</span>
+            <span>Merge approved rows into IQGEO</span>
           </div>
         </section>
 
@@ -334,7 +499,8 @@
           </p>
           <p class="note">
             For millions of records, keep execution close to the databases and
-            use PostGIS for spatial operations.
+            run validation inside Oracle or a backend worker with stable Oracle
+            connections.
           </p>
         </section>
       </aside>
