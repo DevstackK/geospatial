@@ -11,12 +11,12 @@ class IntakeAgent(Agent):
         dataset = state.config["dataset"]
         source = dataset.get("source", "file")
 
-        if source == "postgis":
+        if source in {"postgis", "oracle"}:
             table = dataset.get("table")
             geom_column = dataset.get("geometry_column", "geom")
             state.dataset_profile.update(
                 {
-                    "source": "postgis",
+                    "source": source,
                     "table": table,
                     "geometry_column": geom_column,
                     "id_column": dataset.get("id_column"),
@@ -26,10 +26,10 @@ class IntakeAgent(Agent):
 
             return AgentResult(
                 agent=AgentRole.INTAKE,
-                summary="PostGIS dataset intake metadata captured.",
+                summary=f"{source.title()} dataset intake metadata captured.",
                 observations=[
                     {
-                        "type": "postgis_table",
+                        "type": f"{source}_table",
                         "table": table,
                         "geometry_column": geom_column,
                     }

@@ -1,19 +1,25 @@
-# Geospatial A2A Data Cleansing Agent
+# GeoFlow IQ Studio
 
-This project is a geospatial data cleansing system built around an official
-A2A-compatible agent interface. It helps inspect, clean, validate, and audit
-messy geospatial datasets such as GeoJSON, GeoPackage, Shapefile, and FlatGeoBuf
-files.
+GeoFlow IQ Studio is a focused Gcomm Oracle to IQGEO Oracle cleansing workbench.
+It is similar in intent to tools like FME, but narrower: it is designed to
+profile, validate, classify, audit, and import geospatial network records into a
+strict IQGEO Oracle model.
+
+The browser app is the control UI. It generates database tests, IQGEO rules, and
+pipeline configs. The Python backend is the execution engine and should run near
+Oracle for large datasets.
 
 The core idea is simple: specialized agents analyze different parts of the data,
 propose cleaning rules, deterministic GIS code applies the safe operations, and
 the system writes an audit trail explaining what happened.
 
-It can run in four ways:
+It can run in these ways:
 
 - a Python CLI for local cleaning jobs
-- a browser app for PostGIS to Oracle pipeline configuration
-- a browser dashboard for quick GeoJSON inspection
+- a browser app for GeoFlow IQ Studio, IQGEO rules, DB tests, pipeline config,
+  and quick GeoJSON inspection
+- an Oracle Spatial SQL-plan executor for Gcomm to IQGEO validation
+- a PostGIS executor when PostGIS is available or useful
 - an official A2A JSON-RPC server so other agents or apps can call the cleaner
 
 ## What Problem It Solves
@@ -116,7 +122,7 @@ For large PostGIS-backed cleaning jobs:
 pip install -e ".[postgis]"
 ```
 
-For Oracle write-back:
+For Oracle source validation and Oracle write-back:
 
 ```bash
 pip install -e ".[oracle]"
@@ -172,10 +178,36 @@ For a PostGIS SQL-plan dry-run:
 a2a-geo-clean config/postgis.example.yaml --run-mode dry_run
 ```
 
-For an Oracle write-back dry-run:
+For an Oracle Spatial dry-run against a Gcomm Oracle table:
 
 ```bash
-a2a-geo-clean config/oracle-output.example.yaml --run-mode dry_run
+a2a-geo-clean config/oracle-output.yaml --run-mode dry_run
+```
+
+Oracle table configs do not need an uploaded file:
+
+```yaml
+project:
+  name: gcomm-to-iqgeo-cleansing
+  run_mode: dry_run
+  output_dir: ./runs/gcomm-iqgeo-cleansing
+
+dataset:
+  source: oracle
+  table: GCOMM.ASSETS
+  geometry_column: GEOM
+  id_column: ASSET_ID
+  target_crs: EPSG:4326
+  required_columns:
+    - ASSET_ID
+    - ASSET_TYPE
+    - STATUS
+    - GEOM
+
+execution:
+  engine: oracle_spatial
+  audit_table: IQGEO_STAGE.CLEANSING_AUDIT
+  review_confidence_threshold: 0.85
 ```
 
 ## Frontend
@@ -184,16 +216,36 @@ Open `web/index.html` in a browser, or serve the `web/` folder locally. The
 frontend is a static app, so it does not need Node, a database connection, or a
 backend server just to run in the browser.
 
-The app has two modes.
+The app has these main tabs:
+
+- `How to`: prerequisites, step-by-step usage, value, and deployment roles
+- `Studio`: the high-level GeoFlow IQ workflow
+- `Pipeline`: generates backend YAML for dry-run and execute jobs
+- `IQGEO rules`: defines strict import rules and automated SQL tests
+- `DB tests`: generates read-only Oracle pre-flight checks
+- `GeoJSON inspect`: checks small sample files in the browser
+
+### GeoFlow IQ Studio
+
+Studio mode is the FME-style sequence for the project:
+
+```text
+Connect -> Profile -> Map -> Validate -> Split -> Import
+```
+
+For 8 million records, the important design decision is to keep validation
+database-side. The app should generate the rules and SQL plan; Oracle Spatial
+and the backend runner should do the heavy work.
 
 ### Pipeline Mode
 
-Pipeline mode is the production setup screen for a PostGIS to Oracle cleansing
-job. It helps you build the YAML config that the Python backend will run.
+Pipeline mode is the production setup screen for the selected source,
+validation, and target engines. For Gcomm to IQGEO, use Oracle/Gcomm as the
+source, Oracle Spatial as the validation engine, and IQGEO Oracle as the target.
 
 Use it to enter:
 
-- PostGIS source table, geometry column, ID column, and target CRS
+- Oracle/Gcomm source table, geometry column, ID column, and target CRS
 - required columns and string-trim columns
 - audit table and review confidence threshold
 - Oracle staging table, target table, source/export table, key columns, and
@@ -215,23 +267,28 @@ After reviewing the SQL plan and audit, run execute mode:
 a2a-geo-clean config/oracle-output.yaml --run-mode execute
 ```
 
-Execute mode needs database credentials in the environment:
+Execute mode needs database credentials in the backend environment:
 
 ```bash
 export DATABASE_URL="postgresql://user:password@host:5432/geodata"
-export ORACLE_DSN="host:1521/service"
-export ORACLE_USER="gis_user"
-export ORACLE_PASSWORD="your_password"
+export GCOMM_ORACLE_DSN="gcomm-host:1521/service"
+export GCOMM_ORACLE_USER="gcomm_user"
+export GCOMM_ORACLE_PASSWORD="your_password"
+export IQGEO_ORACLE_DSN="iqgeo-host:1521/service"
+export IQGEO_ORACLE_USER="iqgeo_user"
+export IQGEO_ORACLE_PASSWORD="your_password"
 ```
 
 The intended production pattern is:
 
 ```text
-PostGIS table
-  -> generate cleansing SQL
-  -> audit changed/flagged records
-  -> stage clean rows for Oracle
-  -> MERGE reviewed rows into Oracle target table
+Gcomm Oracle
+  -> read-only DB tests
+  -> Oracle Spatial validation plan
+  -> clean/reject/quarantine/redundant split
+  -> audit changed and blocked records
+  -> stage approved rows
+  -> MERGE reviewed rows into IQGEO Oracle
 ```
 
 ### GeoJSON Inspect Mode
@@ -269,11 +326,12 @@ The browser app is static. Deploying it does not deploy the Python CLI, A2A
 server, PostGIS executor, or Oracle connector. It deploys the UI that generates
 the config and lets users inspect small GeoJSON files.
 
-This repo includes `web/vercel.json`, so the simplest deployment is Vercel.
+This repo includes a root `vercel.json` that forces Vercel to deploy the static
+frontend instead of trying to detect the Python package as a serverless app.
 From the project root:
 
 ```bash
-vercel --prod web
+vercel --prod --scope kloud-stack-native-team
 ```
 
 If the Vercel CLI asks to link the project, choose the existing project if one
@@ -284,10 +342,10 @@ You can also deploy `web/` to any static host, including Netlify, Cloudflare
 Pages, GitHub Pages, or an internal web server. The required files are:
 
 ```text
+vercel.json
 web/index.html
 web/styles.css
 web/app.js
-web/vercel.json
 ```
 
 For the backend execution path, deploy or run the Python service separately:
@@ -496,11 +554,42 @@ counts and changed fields, and only run merge mode after validation.
 
 ## Scaling To 8M Records
 
-Use this framework as the control plane. For large datasets, use PostGIS as the
-execution plane. Agents should exchange summaries and rule proposals, not raw
-record payloads.
+Use this framework as the control plane. For large datasets, use Oracle Spatial
+or another database-native engine as the execution plane. Agents should exchange
+summaries, counts, rules, and SQL plans, not raw record payloads.
 
-The project includes a PostGIS execution mode for this:
+For Gcomm and IQGEO, the fastest path is Oracle-first:
+
+```yaml
+dataset:
+  source: oracle
+  table: GCOMM.ASSETS
+  geometry_column: GEOM
+  id_column: ASSET_ID
+  target_crs: EPSG:4326
+
+execution:
+  engine: oracle_spatial
+  audit_table: IQGEO_STAGE.CLEANSING_AUDIT
+  batch_size: 100000
+```
+
+In `dry_run` mode, the agent generates an auditable Oracle SQL plan without
+touching the database. In `execute` mode, it runs the generated SQL against
+`execution.dsn/user/password`, `ORACLE_DSN/ORACLE_USER/ORACLE_PASSWORD`, or
+`GCOMM_ORACLE_DSN/GCOMM_ORACLE_USER/GCOMM_ORACLE_PASSWORD`.
+
+The generated Oracle Spatial plan uses database-native operations such as:
+
+- `SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT` for invalid geometries
+- `ALL_TAB_COLUMNS` checks for required IQGEO fields
+- `TRIM(...)` for attribute cleanup
+- `CASE` expressions for category normalization
+- `GROUP BY ... HAVING COUNT(*) > 1` for duplicate flags
+- audit-table inserts for counts and review evidence
+- `DBMS_STATS.GATHER_TABLE_STATS` after validation work
+
+PostGIS is still supported when available:
 
 ```yaml
 dataset:
@@ -538,5 +627,6 @@ The generated PostGIS plan uses database-native operations such as:
 - audit-table inserts for counts and review evidence
 
 For 8M records, keep the browser out of the execution path. Use the browser only
-for small samples and previews. Use the A2A server or CLI to plan the cleansing
-job, and let PostGIS apply rules close to the data.
+for small samples, setup, and config generation. Use the A2A server or CLI to
+plan the cleansing job, and let Oracle Spatial or PostGIS apply rules close to
+the data.

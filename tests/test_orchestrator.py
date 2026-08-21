@@ -128,6 +128,70 @@ def test_cli_does_not_require_upload_for_postgis_config(tmp_path: Path) -> None:
     assert updated["project"]["output_dir"] == "runs/parcels-cleaning"
 
 
+def test_cli_does_not_require_upload_for_oracle_config(tmp_path: Path) -> None:
+    config = {
+        "project": {"name": "oracle-test", "run_mode": "dry_run"},
+        "dataset": {
+            "source": "oracle",
+            "table": "GCOMM.ASSETS",
+            "geometry_column": "GEOM",
+        },
+    }
+
+    updated = apply_cli_overrides(
+        config,
+        input_path=None,
+        uploads_dir=tmp_path,
+        run_mode="dry_run",
+        output_dir=None,
+    )
+
+    assert updated["dataset"]["source"] == "oracle"
+    assert "path" not in updated["dataset"]
+    assert updated["project"]["output_dir"] == "runs/ASSETS-cleaning"
+
+
+def test_oracle_spatial_dry_run_generates_validation_plan(tmp_path: Path) -> None:
+    config = {
+        "project": {
+            "name": "gcomm-to-iqgeo-test",
+            "run_mode": "dry_run",
+            "output_dir": str(tmp_path),
+        },
+        "dataset": {
+            "source": "oracle",
+            "table": "GCOMM.ASSETS",
+            "geometry_column": "GEOM",
+            "id_column": "ASSET_ID",
+            "target_crs": "EPSG:4326",
+            "required_columns": ["ASSET_ID", "STATUS"],
+        },
+        "rules": {
+            "string_trim_columns": ["STATUS"],
+            "category_maps": {"STATUS": {"active ": "ACTIVE", "retired": "RETIRED"}},
+            "bounds": {"minx": -180, "miny": -90, "maxx": 180, "maxy": 90},
+        },
+        "execution": {
+            "engine": "oracle_spatial",
+            "audit_table": "IQGEO_STAGE.CLEANSING_AUDIT",
+            "review_confidence_threshold": 0.85,
+        },
+    }
+
+    state = CleaningOrchestrator(config).run()
+
+    oracle_log = state.execution_log[0]
+    sql = "\n".join(step["sql"] for step in oracle_log["sql_steps"])
+    assert oracle_log["status"] == "dry_run"
+    assert oracle_log["engine"] == "oracle_spatial"
+    assert oracle_log["table"] == '"GCOMM"."ASSETS"'
+    assert "SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT" in sql
+    assert "ALL_TAB_COLUMNS" in sql
+    assert 'UPDATE "GCOMM"."ASSETS" SET "STATUS" = TRIM("STATUS")' in sql
+    assert "DBMS_STATS.GATHER_TABLE_STATS" in sql
+    assert (tmp_path / "audit.json").exists()
+
+
 def test_oracle_sink_dry_run_generates_merge_plan(tmp_path: Path) -> None:
     config = {
         "project": {

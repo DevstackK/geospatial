@@ -8,6 +8,7 @@ const state = {
 
 const els = {
   modeButtons: document.querySelectorAll(".mode-button"),
+  studioView: document.querySelector("#studioView"),
   pipelineView: document.querySelector("#pipelineView"),
   iqgeoView: document.querySelector("#iqgeoView"),
   dbtestsView: document.querySelector("#dbtestsView"),
@@ -257,17 +258,19 @@ renderDbTests();
 drawEmptyMap();
 
 function setView(view) {
+  const showStudio = view === "studio";
   const showPipeline = view === "pipeline";
   const showIqgeo = view === "iqgeo";
   const showDbtests = view === "dbtests";
   const showHowto = view === "howto";
+  els.studioView.classList.toggle("hidden", !showStudio);
   els.pipelineView.classList.toggle("hidden", !showPipeline);
   els.iqgeoView.classList.toggle("hidden", !showIqgeo);
   els.dbtestsView.classList.toggle("hidden", !showDbtests);
   els.howtoView.classList.toggle("hidden", !showHowto);
   els.inspectView.classList.toggle(
     "hidden",
-    showPipeline || showIqgeo || showDbtests || showHowto,
+    showStudio || showPipeline || showIqgeo || showDbtests || showHowto,
   );
   els.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
@@ -280,6 +283,12 @@ const onboardingSteps = [
     selector: '[data-view="howto"]',
     title: "Start with How to",
     text: "This tab explains the Gcomm Oracle to IQGEO Oracle flow, the prerequisites, and the business value before you run anything.",
+  },
+  {
+    view: "studio",
+    selector: '[data-view="studio"]',
+    title: "Use GeoFlow IQ Studio",
+    text: "Studio gives the FME-style sequence: connect, profile, map, validate, split outcomes, and import only approved IQGEO rows.",
   },
   {
     view: "dbtests",

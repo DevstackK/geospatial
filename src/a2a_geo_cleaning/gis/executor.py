@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from a2a_geo_cleaning.contracts import CleaningRule, RuleType, WorkflowState
+from a2a_geo_cleaning.gis.oracle_spatial import OracleSpatialExecutor
 from a2a_geo_cleaning.gis.postgis import PostGISExecutor
 
 
@@ -16,6 +17,13 @@ class GeoExecutor:
         self.state = state
 
     def execute(self) -> None:
+        dataset_source = self.state.config["dataset"].get("source")
+        execution_engine = self.state.config.get("execution", {}).get("engine")
+
+        if dataset_source == "oracle" or execution_engine == "oracle_spatial":
+            OracleSpatialExecutor(self.state).execute()
+            return
+
         if self.state.config["dataset"].get("source") == "postgis":
             PostGISExecutor(self.state).execute()
             return

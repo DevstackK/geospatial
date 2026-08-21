@@ -1,0 +1,338 @@
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from a2a_geo_cleaning.contracts import CleaningRule, RuleType, WorkflowState
+
+
+IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+class OracleSpatialConfigurationError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class OracleSpatialSQLStep:
+    name: str
+    sql: str
+    transactional: bool = True
+
+
+class OracleSpatialExecutor:
+    def __init__(self, state: WorkflowState) -> None:
+        self.state = state
+        dataset = state.config["dataset"]
+        self.schema, self.table = self._split_table(dataset["table"])
+        self.geom_column = self._quote_identifier(
+            dataset.get("geometry_column", "GEOM")
+        )
+        self.id_column = dataset.get("id_column")
+        self.audit_table = self._quote_qualified(
+            state.config.get("execution", {}).get(
+                "audit_table", f"{self.schema}.CLEANSING_AUDIT"
+            )
+        )
+
+    def execute(self) -> None:
+        steps = self.build_plan()
+        run_mode = self.state.config["project"].get("run_mode", "dry_run")
+
+        if run_mode == "dry_run":
+            self.state.execution_log.append(
+                {
+                    "status": "dry_run",
+                    "engine": "oracle_spatial",
+                    "message": "Oracle Spatial SQL plan was generated but not executed.",
+                    "table": self.qualified_table,
+                    "rule_count": len(self.state.accepted_rules),
+                    "sql_steps": [step.__dict__ for step in steps],
+                }
+            )
+            return
+
+        dsn = (
+            self.state.config.get("execution", {}).get("dsn")
+            or os.environ.get("ORACLE_DSN")
+            or os.environ.get("GCOMM_ORACLE_DSN")
+        )
+        user = (
+            self.state.config.get("execution", {}).get("user")
+            or os.environ.get("ORACLE_USER")
+            or os.environ.get("GCOMM_ORACLE_USER")
+        )
+        password = (
+            self.state.config.get("execution", {}).get("password")
+            or os.environ.get("ORACLE_PASSWORD")
+            or os.environ.get("GCOMM_ORACLE_PASSWORD")
+        )
+        if not all([dsn, user, password]):
+            raise OracleSpatialConfigurationError(
+                "Set execution.dsn/user/password or ORACLE_DSN, ORACLE_USER, "
+                "and ORACLE_PASSWORD to execute Oracle Spatial validation."
+            )
+
+        try:
+            import oracledb
+        except ImportError as exc:
+            raise OracleSpatialConfigurationError(
+                "Install Oracle dependencies with `pip install -e .[oracle]`."
+            ) from exc
+
+        executed: list[dict[str, Any]] = []
+        with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
+            with conn.cursor() as cur:
+                for step in steps:
+                    cur.execute(step.sql)
+                    executed.append(
+                        {
+                            "name": step.name,
+                            "rowcount": cur.rowcount,
+                            "transactional": step.transactional,
+                        }
+                    )
+            conn.commit()
+
+        self.state.execution_log.append(
+            {
+                "status": "executed",
+                "engine": "oracle_spatial",
+                "table": self.qualified_table,
+                "rule_count": len(self.state.accepted_rules),
+                "executed_steps": executed,
+            }
+        )
+
+    def build_plan(self) -> list[OracleSpatialSQLStep]:
+        steps = [self._create_audit_table_step()]
+        for rule in self.state.accepted_rules:
+            steps.extend(self._steps_for_rule(rule))
+        steps.extend(self._validation_steps())
+        return steps
+
+    @property
+    def qualified_table(self) -> str:
+        return f"{self._quote_identifier(self.schema)}.{self._quote_identifier(self.table)}"
+
+    def _create_audit_table_step(self) -> OracleSpatialSQLStep:
+        return OracleSpatialSQLStep(
+            "create_oracle_validation_audit_table",
+            (
+                "BEGIN "
+                "EXECUTE IMMEDIATE "
+                f"{self._literal(self._create_audit_table_sql())}; "
+                "EXCEPTION WHEN OTHERS THEN "
+                "IF SQLCODE != -955 THEN RAISE; END IF; "
+                "END;"
+            ),
+        )
+
+    def _steps_for_rule(self, rule: CleaningRule) -> list[OracleSpatialSQLStep]:
+        target = self._literal(rule.target)
+
+        if rule.rule_type == RuleType.REQUIRE_COLUMN:
+            column = rule.parameters["column"]
+            return [
+                OracleSpatialSQLStep(
+                    f"check_required_column_{column}",
+                    (
+                        f"INSERT INTO {self.audit_table} "
+                        "(RUN_NAME, RULE_TYPE, TARGET, AFFECTED_COUNT, DETAILS) "
+                        f"SELECT {self.run_name}, 'require_column', {target}, "
+                        "CASE WHEN EXISTS ("
+                        "SELECT 1 FROM ALL_TAB_COLUMNS "
+                        f"WHERE OWNER = {self._literal(self.schema.upper())} "
+                        f"AND TABLE_NAME = {self._literal(self.table.upper())} "
+                        f"AND COLUMN_NAME = {self._literal(column.upper())}"
+                        ") THEN 0 ELSE 1 END, "
+                        f"{self._literal('column=' + column)} FROM DUAL"
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.NORMALIZE_CRS:
+            target_srid = self._srid(rule.parameters["target_crs"])
+            return [
+                OracleSpatialSQLStep(
+                    "audit_srid_mismatch",
+                    self._insert_count_sql(
+                        "normalize_crs",
+                        target,
+                        (
+                            f"{self.geom_column} IS NOT NULL AND "
+                            f"NVL({self.geom_column}.SDO_SRID, -1) <> {target_srid}"
+                        ),
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.DROP_EMPTY_GEOMETRY:
+            return [
+                OracleSpatialSQLStep(
+                    "audit_null_geometries",
+                    self._insert_count_sql(
+                        "drop_empty_geometry",
+                        target,
+                        f"{self.geom_column} IS NULL",
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.MAKE_VALID:
+            return [
+                OracleSpatialSQLStep(
+                    "audit_invalid_geometries",
+                    self._insert_count_sql(
+                        "make_valid",
+                        target,
+                        (
+                            f"{self.geom_column} IS NOT NULL AND "
+                            f"SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT({self.geom_column}, 0.005) <> 'TRUE'"
+                        ),
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.CHECK_BOUNDS:
+            return [
+                OracleSpatialSQLStep(
+                    "audit_bounds_review_required",
+                    (
+                        f"INSERT INTO {self.audit_table} "
+                        "(RUN_NAME, RULE_TYPE, TARGET, AFFECTED_COUNT, DETAILS) "
+                        f"SELECT {self.run_name}, 'check_bounds', {target}, NULL, "
+                        f"{self._literal('Review layer extent using Oracle Spatial metadata or SDO_AGGR_MBR.')} "
+                        "FROM DUAL"
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.TRIM_STRING:
+            column = self._quote_identifier(rule.parameters["column"])
+            return [
+                OracleSpatialSQLStep(
+                    f"trim_{rule.parameters['column']}",
+                    (
+                        f"UPDATE {self.qualified_table} "
+                        f"SET {column} = TRIM({column}) "
+                        f"WHERE {column} IS NOT NULL AND {column} <> TRIM({column})"
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.NORMALIZE_CATEGORY:
+            column = self._quote_identifier(rule.parameters["column"])
+            cases = []
+            values = []
+            for raw, normalized in rule.parameters["mapping"].items():
+                cases.append(
+                    f"WHEN LOWER(TRIM({column})) = {self._literal(str(raw).lower())} "
+                    f"THEN {self._literal(str(normalized))}"
+                )
+                values.append(self._literal(str(raw).lower()))
+            return [
+                OracleSpatialSQLStep(
+                    f"normalize_{rule.parameters['column']}",
+                    (
+                        f"UPDATE {self.qualified_table} "
+                        f"SET {column} = CASE {' '.join(cases)} ELSE {column} END "
+                        f"WHERE LOWER(TRIM({column})) IN ({', '.join(values)})"
+                    ),
+                )
+            ]
+
+        if rule.rule_type == RuleType.FLAG_DUPLICATES and self.id_column:
+            column = self._quote_identifier(rule.parameters["column"])
+            return [
+                OracleSpatialSQLStep(
+                    f"audit_duplicate_{rule.parameters['column']}",
+                    (
+                        f"INSERT INTO {self.audit_table} "
+                        "(RUN_NAME, RULE_TYPE, TARGET, AFFECTED_COUNT, DETAILS) "
+                        f"SELECT {self.run_name}, 'flag_duplicates', {target}, COUNT(*), "
+                        f"{self._literal('column=' + rule.parameters['column'])} "
+                        f"FROM {self.qualified_table} "
+                        f"WHERE {column} IN ("
+                        f"SELECT {column} FROM {self.qualified_table} "
+                        f"GROUP BY {column} HAVING COUNT(*) > 1)"
+                    ),
+                )
+            ]
+
+        return []
+
+    def _create_audit_table_sql(self) -> str:
+        return (
+            f"CREATE TABLE {self.audit_table} ("
+            "ID NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, "
+            "RUN_NAME VARCHAR2(255) NOT NULL, "
+            "RULE_TYPE VARCHAR2(100) NOT NULL, "
+            "TARGET VARCHAR2(255) NOT NULL, "
+            "AFFECTED_COUNT NUMBER, "
+            "DETAILS CLOB, "
+            "CREATED_AT TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL"
+            ")"
+        )
+
+    def _validation_steps(self) -> list[OracleSpatialSQLStep]:
+        return [
+            OracleSpatialSQLStep(
+                "gather_oracle_table_stats",
+                (
+                    "BEGIN DBMS_STATS.GATHER_TABLE_STATS("
+                    f"ownname => {self._literal(self.schema.upper())}, "
+                    f"tabname => {self._literal(self.table.upper())}); END;"
+                ),
+                transactional=False,
+            )
+        ]
+
+    @property
+    def run_name(self) -> str:
+        return self._literal(self.state.config["project"].get("name", "cleaning"))
+
+    def _insert_count_sql(self, rule_type: str, target: str, condition: str) -> str:
+        return (
+            f"INSERT INTO {self.audit_table} "
+            "(RUN_NAME, RULE_TYPE, TARGET, AFFECTED_COUNT) "
+            f"SELECT {self.run_name}, {self._literal(rule_type)}, {target}, COUNT(*) "
+            f"FROM {self.qualified_table} WHERE {condition}"
+        )
+
+    def _split_table(self, table: str) -> tuple[str, str]:
+        parts = table.split(".")
+        if len(parts) == 1:
+            schema, name = "GIS", parts[0]
+        elif len(parts) == 2:
+            schema, name = parts
+        else:
+            raise OracleSpatialConfigurationError(
+                "dataset.table must be `table` or `schema.table`."
+            )
+        self._quote_identifier(schema)
+        self._quote_identifier(name)
+        return schema, name
+
+    def _quote_qualified(self, value: str) -> str:
+        parts = value.split(".")
+        if len(parts) != 2:
+            raise OracleSpatialConfigurationError("Qualified names must be `schema.table`.")
+        return ".".join(self._quote_identifier(part) for part in parts)
+
+    def _quote_identifier(self, value: str) -> str:
+        if not IDENTIFIER_RE.match(value):
+            raise OracleSpatialConfigurationError(f"Unsafe Oracle identifier: {value!r}")
+        return f'"{value.upper()}"'
+
+    def _literal(self, value: str) -> str:
+        return "'" + value.replace("'", "''") + "'"
+
+    def _srid(self, crs: str) -> int:
+        if not crs.upper().startswith("EPSG:"):
+            raise OracleSpatialConfigurationError(
+                "Oracle Spatial CRS normalization requires EPSG:<srid>."
+            )
+        return int(crs.split(":", 1)[1])

@@ -67,10 +67,10 @@ def apply_cli_overrides(
     updated = deepcopy(config)
     project = updated.setdefault("project", {})
     dataset = updated.setdefault("dataset", {})
-    is_postgis = dataset.get("source") == "postgis"
+    is_database_source = dataset.get("source") in {"postgis", "oracle"}
 
     selected_input = None
-    if not is_postgis or input_path:
+    if not is_database_source or input_path:
         selected_input = input_path or find_latest_upload(uploads_dir)
         selected_input = selected_input.expanduser().resolve()
         dataset["path"] = str(selected_input)
@@ -84,8 +84,8 @@ def apply_cli_overrides(
 
     if output_dir:
         project["output_dir"] = str(output_dir.expanduser().resolve())
-    elif is_postgis:
-        table_name = str(dataset.get("table", "postgis-dataset")).split(".")[-1]
+    elif is_database_source:
+        table_name = str(dataset.get("table", f"{dataset.get('source')}-dataset")).split(".")[-1]
         project["output_dir"] = str(Path("runs") / f"{table_name}-cleaning")
     else:
         project["output_dir"] = str(

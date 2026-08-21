@@ -9,12 +9,15 @@
   <body>
     <header class="topbar">
       <div>
-        <p class="eyebrow">A2A Geo Cleaning</p>
-        <h1>Gcomm to IQGEO cleansing app</h1>
+        <p class="eyebrow">GeoFlow IQ Studio</p>
+        <h1>Gcomm to IQGEO cleansing workbench</h1>
       </div>
       <div class="actions">
         <button class="mode-button" data-view="howto" type="button">
           How to
+        </button>
+        <button class="mode-button" data-view="studio" type="button">
+          Studio
         </button>
         <button class="mode-button active" data-view="pipeline" type="button">
           Pipeline
@@ -37,6 +40,126 @@
         </label>
       </div>
     </header>
+
+    <main id="studioView" class="pipeline-layout hidden">
+      <section class="pipeline-main">
+        <div class="toolbar">
+          <div>
+            <h2>GeoFlow IQ Studio</h2>
+            <p>
+              A focused FME-style flow for high-volume Oracle cleansing: profile
+              Gcomm, map to IQGEO, validate in Oracle Spatial, split outcomes,
+              and import only approved rows.
+            </p>
+          </div>
+          <div class="toolbar-actions">
+            <button data-view="dbtests" class="mode-button" type="button">Test DBs</button>
+            <button data-view="iqgeo" class="mode-button" type="button">Rules</button>
+            <button data-view="pipeline" class="mode-button" type="button">Build config</button>
+          </div>
+        </div>
+
+        <div class="studio-flow" aria-label="GeoFlow IQ workflow">
+          <article>
+            <span>01</span>
+            <strong>Connect</strong>
+            <p>Reach Gcomm Oracle and IQGEO Oracle from a backend runner on VPN or private network.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <strong>Profile</strong>
+            <p>Count 8M+ records in-database: null IDs, duplicate IDs, status spread, SRIDs, and geometry quality.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <strong>Map</strong>
+            <p>Align Gcomm fields to IQGEO required fields, asset types, statuses, and parent-reference rules.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <strong>Validate</strong>
+            <p>Run Oracle Spatial checks close to the data instead of dragging millions of rows through the browser.</p>
+          </article>
+          <article>
+            <span>05</span>
+            <strong>Split</strong>
+            <p>Classify rows as approved, fixed, rejected, quarantined, redundant, or needs review.</p>
+          </article>
+          <article>
+            <span>06</span>
+            <strong>Import</strong>
+            <p>Stage and merge approved rows into IQGEO Oracle with an audit trail for every blocked or changed row.</p>
+          </article>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h3>
+              High-volume design
+              <button class="info-button" type="button" title="For millions of rows, the app should generate the plan and the backend should execute set-based SQL inside Oracle.">i</button>
+            </h3>
+            <span>Built for 8M+ records</span>
+          </div>
+          <div class="check-grid">
+            <article>
+              <strong>Database-side processing</strong>
+              <p>
+                Validation plans use Oracle SQL and Oracle Spatial so heavy
+                checks stay near Gcomm and IQGEO data.
+              </p>
+              <code>oracle_spatial dry-run and execute</code>
+            </article>
+            <article>
+              <strong>Rule automation</strong>
+              <p>
+                IQGEO rules become repeatable SQL checks for geometry, schema,
+                domains, duplicate IDs, redundant statuses, and references.
+              </p>
+              <code>generated test pack</code>
+            </article>
+            <article>
+              <strong>Audit-first migration</strong>
+              <p>
+                Dry-run produces counts and SQL before writes, so teams can
+                sign off on reject, quarantine, and redundant records.
+              </p>
+              <code>dry_run before execute</code>
+            </article>
+            <article>
+              <strong>Focused workbench</strong>
+              <p>
+                This is not a generic ETL canvas. It is tuned for Gcomm Oracle
+                cleansing and strict IQGEO Oracle import gates.
+              </p>
+              <code>Gcomm -> IQGEO</code>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>Recommended sequence</h3>
+          <div class="flow-list">
+            <span>1. DB tests</span>
+            <span>2. IQGEO rules</span>
+            <span>3. Pipeline YAML</span>
+            <span>4. Backend dry-run</span>
+            <span>5. Audit review</span>
+            <span>6. Execute approved import</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Why faster than generic ETL</h3>
+          <p class="note">
+            For 8 million records, speed comes from set-based Oracle queries,
+            indexed staging tables, batch merges, and avoiding row-by-row
+            desktop-style transforms.
+          </p>
+        </section>
+      </aside>
+    </main>
 
     <main id="pipelineView" class="pipeline-layout">
       <section class="pipeline-main">
